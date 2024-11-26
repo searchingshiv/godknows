@@ -13,6 +13,7 @@ import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
 import asyncio
+import os
 
 HUGGING_FACE_API_TOKEN = "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"
 
@@ -60,7 +61,6 @@ def analyze_tone(user_message):
             json=payload,
         )
         response.raise_for_status()
-        # Example tone labels; refine based on the API response structure
         labels = response.json()["labels"]
         if "sad" in labels:
             return "sadness"
@@ -131,10 +131,9 @@ async def random_verse(update: Update, context):
 async def plain_text_response(update: Update, context):
     """Handle plain text messages with context-aware replies."""
     user_message = update.message.text
-    tone = analyze_tone(user_message)  # Analyze user's message
+    tone = analyze_tone(user_message)
     verse, book, chapter, verse_number = get_random_verse()
     
-    # Tone-specific responses
     tone_map = {
         "sadness": "comforting",
         "joy": "celebratory",
@@ -186,13 +185,11 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("random", random_verse))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plain_text_response))
-     port = int(os.environ.get("PORT", 8443))  # Default to 8443 for local testing
+
+    port = int(os.environ.get("PORT", 8443))  # Default to 8443 for local testing
     app.run_webhook(
         listen="0.0.0.0",
         port=port,
         url_path="",
-        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{TOKEN}"
+        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/TOKEN"
     )
-
-    logger.info("Bot started.")
-    app.run_polling()
