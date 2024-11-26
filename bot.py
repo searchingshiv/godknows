@@ -113,6 +113,8 @@ async def plain_text_response(update: Update, context):
 
 # Scheduler Job
 async def send_morning_verses(context):
+    asyncio.run(send_morning_verses(context=None))  # Adjust to your needs
+
     """Send morning verses to all subscribed users."""
     subscribed_users = users.find({"morning_subscribed": True})
     verse, book, chapter, verse_number = get_random_verse()
