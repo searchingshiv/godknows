@@ -52,34 +52,29 @@ def get_random_verse():
     return f"{verse_text}", book_name, chapter_index + 1, verse_index + 1
 
 def analyze_tone(user_message):
-    """Analyze the tone of the user's message."""
+    """Analyze the tone of the user's message using Hugging Face API."""
     headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
     payload = {"inputs": user_message}
     retries = 3
     for attempt in range(retries):
         try:
+            # Using a different model for sentiment analysis: distilbert
             response = requests.post(
-                "https://api-inference.huggingface.co/models/facebook/bart-large-mnli",
+                "https://api-inference.huggingface.co/models/distilbert-base-uncased",
                 headers=headers,
                 json=payload,
             )
             response.raise_for_status()
-            labels = response.json()["labels"]
-            if "sad" in labels:
-                return "sadness"
-            elif "happy" in labels:
+            sentiment = response.json()[0]["label"]  # Correctly handle the API response
+            if sentiment == "POSITIVE":
                 return "joy"
-            elif "frustrated" in labels:
-                return "frustration"
-            elif "lonely" in labels:
-                return "loneliness"
-            elif "hopeful" in labels:
-                return "hopeful"
+            elif sentiment == "NEGATIVE":
+                return "sadness"
             else:
                 return "neutral"
         except requests.exceptions.RequestException as e:
             logger.error(f"Failed to analyze tone (attempt {attempt + 1}): {e}")
-            time.sleep(2 ** attempt)  # Exponential backoff
+            time.sleep(2 ** attempt)  # Exponential backoff for retries
     return "neutral"  # Default if all retries fail
 
 def explain_verse(verse_text, tone="uplifting"):
@@ -90,8 +85,9 @@ def explain_verse(verse_text, tone="uplifting"):
         "parameters": {"max_length": 100},
     }
     try:
+        # You can try other models like `t5-small` or `gpt2`
         response = requests.post(
-            "https://api-inference.huggingface.co/models/distilgpt2",
+            "https://api-inference.huggingface.co/models/t5-small",
             headers=headers,
             json=payload,
         )
@@ -100,6 +96,7 @@ def explain_verse(verse_text, tone="uplifting"):
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to generate explanation: {e}")
         return "I'm sorry, I couldn't generate an explanation at the moment."
+
 
 async def log_message(context, user_id, user_message, bot_reply):
     """Log user messages and bot replies to the specified channel."""
