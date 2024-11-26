@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 with open("kjv.json") as f:
     BIBLE = json.load(f)
 
-# MongoDB Setup (Free Tier on MongoDB Atlas recommended)
+# MongoDB Setup
 MONGO_URI = "mongodb+srv://bible:bible@cluster0.uc77o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 db_client = MongoClient(MONGO_URI)
 db = db_client["bible_bot"]
@@ -40,26 +40,49 @@ LOG_CHANNEL_ID = -1002351224104  # Replace with your actual channel ID
 # Helper Functions
 def get_random_verse():
     """Fetch a random Bible verse."""
-    book_data = random.choice(BIBLE)  # Random book
+    book_data = random.choice(BIBLE)
     book_name = book_data["abbrev"]
     chapters = book_data["chapters"]
     chapter_index = random.randint(0, len(chapters) - 1)
     verses = chapters[chapter_index]
     verse_index = random.randint(0, len(verses) - 1)
     verse_text = verses[verse_index]
-    timestamp = datetime.now().strftime("%H:%M")
-    return (
-        f"{verse_text} ({timestamp})",  # Verse with timestamp
-        book_name,
-        chapter_index + 1,  # 1-based chapter index
-        verse_index + 1,  # 1-based verse index
-    )
+    return f"{verse_text}", book_name, chapter_index + 1, verse_index + 1
 
-def explain_verse(verse_text, tone="calm"):
+def analyze_tone(user_message):
+    """Analyze the tone of the user's message."""
+    headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
+    payload = {"inputs": f"Analyze the sentiment of this text: {user_message}"}
+    try:
+        response = requests.post(
+            "https://api-inference.huggingface.co/models/facebook/bart-large-mnli",
+            headers=headers,
+            json=payload,
+        )
+        response.raise_for_status()
+        # Example tone labels; refine based on the API response structure
+        labels = response.json()["labels"]
+        if "sad" in labels:
+            return "sadness"
+        elif "happy" in labels:
+            return "joy"
+        elif "frustrated" in labels:
+            return "frustration"
+        elif "lonely" in labels:
+            return "loneliness"
+        elif "hopeful" in labels:
+            return "hopeful"
+        else:
+            return "neutral"
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to analyze tone: {e}")
+        return "neutral"
+
+def explain_verse(verse_text, tone="uplifting"):
     """Generate an explanation for a verse using Hugging Face API."""
     headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
     payload = {
-        "inputs": f"Explain this Bible verse in a {tone} way: {verse_text}",
+        "inputs": f"Explain this Bible verse in an {tone} way: {verse_text}",
         "parameters": {"max_length": 100},
     }
     try:
@@ -72,7 +95,7 @@ def explain_verse(verse_text, tone="calm"):
         return response.json()[0]["generated_text"]
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to generate explanation: {e}")
-        return "Sorry, I couldn't generate an explanation right now."
+        return "I'm sorry, I couldn't generate an explanation at the moment."
 
 async def log_message(context, user_id, user_message, bot_reply):
     """Log user messages and bot replies to the specified channel."""
@@ -93,24 +116,41 @@ async def start(update: Update, context):
     if not users.find_one({"user_id": user.id}):
         users.insert_one({"user_id": user.id, "username": user.username, "morning_subscribed": True})
     await update.message.reply_text(
-        "Welcome to the KJV Bible Bot! Feel free to ask questions or share your feelings, and I'll reply with a Bible verse!"
+        "🌟 Welcome to the KJV Bible Bot! 🌟\n\n"
+        "Feel free to share your thoughts or ask questions, and I'll respond with a meaningful Bible verse to uplift your spirit."
     )
 
 async def random_verse(update: Update, context):
     """Send a random Bible verse."""
     verse, book, chapter, verse_number = get_random_verse()
     context.user_data["last_verse"] = (verse, book, chapter, verse_number)
-    await update.message.reply_text(verse)
-    await log_message(context, update.effective_user.id, "/random", verse)
+    reply = f"📖 **{book} {chapter}:{verse_number}**\n\n*{verse}*"
+    await update.message.reply_text(reply)
+    await log_message(context, update.effective_user.id, "/random", reply)
 
 async def plain_text_response(update: Update, context):
-    """Handle plain text messages with Bible verses and explanations."""
+    """Handle plain text messages with context-aware replies."""
     user_message = update.message.text
+    tone = analyze_tone(user_message)  # Analyze user's message
     verse, book, chapter, verse_number = get_random_verse()
-    explanation = explain_verse(verse, tone="calm")
-    response = f"{verse}\n\n{explanation}"
-    await update.message.reply_text(response)
-    await log_message(context, update.effective_user.id, user_message, response)
+    
+    # Tone-specific responses
+    tone_map = {
+        "sadness": "comforting",
+        "joy": "celebratory",
+        "frustration": "calming",
+        "loneliness": "empathetic",
+        "hopeful": "encouraging",
+        "neutral": "informative",
+    }
+    explanation = explain_verse(verse, tone=tone_map.get(tone, "uplifting"))
+    reply = (
+        f"📖 **{book} {chapter}:{verse_number}**\n\n"
+        f"*{verse}*\n\n"
+        f"💡 *Reflection*: {explanation}"
+    )
+    await update.message.reply_text(reply)
+    await log_message(context, update.effective_user.id, user_message, reply)
 
 # Scheduler Job
 async def send_morning_verses_async():
@@ -122,7 +162,12 @@ async def send_morning_verses_async():
             app = ApplicationBuilder().token("7112230953:AAGAzaUtko1v1hlH8--yoyu8g4uiOg1-DFA").build()
             await app.bot.send_message(
                 chat_id=user["user_id"],
-                text=f"Good morning! Here's your verse:\n{verse}\n{book} {chapter}:{verse_number}"
+                text=(
+                    "🌅 **Good Morning!** 🌅\n\n"
+                    f"Here's your verse for today:\n\n"
+                    f"📖 **{book} {chapter}:{verse_number}**\n\n"
+                    f"*{verse}*"
+                )
             )
         except Exception as e:
             logger.error(f"Error sending verse to {user['user_id']}: {e}")
@@ -141,6 +186,13 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("random", random_verse))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plain_text_response))
+     port = int(os.environ.get("PORT", 8443))  # Default to 8443 for local testing
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path="",
+        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{TOKEN}"
+    )
 
     logger.info("Bot started.")
     app.run_polling()
