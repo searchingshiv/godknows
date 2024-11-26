@@ -9,10 +9,9 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-from transformers import pipeline
+import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
-import requests
 
 HUGGING_FACE_API_TOKEN = "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"
 
@@ -23,9 +22,6 @@ logger = logging.getLogger(__name__)
 # Load KJV Bible Data
 with open("kjv.json") as f:
     BIBLE = json.load(f)
-
-# Initialize AI Model
-ai_model = pipeline("text-generation", model="distilgpt2")
 
 # MongoDB Setup (Free Tier on MongoDB Atlas recommended)
 MONGO_URI = "mongodb+srv://bible:bible@cluster0.uc77o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -59,16 +55,17 @@ def explain_verse(verse_text, tone="calm"):
         "inputs": f"Explain this Bible verse in a {tone} way: {verse_text}",
         "parameters": {"max_length": 100}
     }
-    response = requests.post(
-        "https://api-inference.huggingface.co/models/distilgpt2", 
-        headers=headers, 
-        json=payload
-    )
-    if response.status_code == 200:
+    try:
+        response = requests.post(
+            "https://api-inference.huggingface.co/models/distilgpt2", 
+            headers=headers, 
+            json=payload
+        )
+        response.raise_for_status()  # Will raise an HTTPError if the response code is not 200
         return response.json()[0]["generated_text"]
-    else:
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to generate explanation: {e}")
         return "Sorry, I couldn't generate an explanation right now."
-
 
 async def log_message(context, user_id, user_message, bot_reply):
     """Log user messages and bot replies to the specified channel."""
@@ -129,7 +126,7 @@ scheduler.add_job(send_morning_verses, "cron", hour=8, minute=0)
 
 # Main Function
 if __name__ == "__main__":
-    app = ApplicationBuilder().token("7112230953:AAGAzaUtko1v1hlH8--yoyu8g4uiOg1-DFA").build()
+    app = ApplicationBuilder().token("YOUR_BOT_API_TOKEN_HERE").build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("random", random_verse))
