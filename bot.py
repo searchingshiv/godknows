@@ -93,7 +93,7 @@ def analyze_tone(user_message):
 
 
 def explain_verse(verse_text, tone="uplifting"):
-    """Generate an explanation for a verse using a text generation model."""
+    """Generate an explanation for a verse using Hugging Face API with a fallback."""
     headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
     payload = {
         "inputs": f"Explain this Bible verse in an {tone} way: {verse_text}",
@@ -101,16 +101,18 @@ def explain_verse(verse_text, tone="uplifting"):
     }
     try:
         response = requests.post(
-            "https://api-inference.huggingface.co/models/EleutherAI/gpt-neo-1.3B",
+            "https://api-inference.huggingface.co/models/distilgpt2",  # Change model here
             headers=headers,
             json=payload,
-            timeout=10
         )
         response.raise_for_status()
         return response.json()[0]["generated_text"]
-    except requests.RequestException as e:
-        logger.error(f"Explanation generation failed: {e}")
-        return "This verse speaks deeply to the soul, reflecting God's eternal wisdom."
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to generate explanation: {e}")
+        return "I'm sorry, I couldn't generate an explanation at the moment. Please try again later."
+    except Exception as e:
+        logger.error(f"Unexpected error while generating explanation: {e}")
+        return "An unexpected error occurred while generating the explanation."
 
 
 async def log_message(context, user_id, user_message, bot_reply):
