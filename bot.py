@@ -12,6 +12,7 @@ from telegram.ext import (
 import requests
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
+import asyncio
 
 HUGGING_FACE_API_TOKEN = "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"
 
@@ -112,23 +113,26 @@ async def plain_text_response(update: Update, context):
     await log_message(context, update.effective_user.id, user_message, response)
 
 # Scheduler Job
-async def send_morning_verses(context):
-    asyncio.run(send_morning_verses(context=None))  # Adjust to your needs
-
+async def send_morning_verses_async():
     """Send morning verses to all subscribed users."""
     subscribed_users = users.find({"morning_subscribed": True})
     verse, book, chapter, verse_number = get_random_verse()
     for user in subscribed_users:
         try:
-            await context.bot.send_message(
+            app = ApplicationBuilder().token("7112230953:AAGAzaUtko1v1hlH8--yoyu8g4uiOg1-DFA").build()
+            await app.bot.send_message(
                 chat_id=user["user_id"],
                 text=f"Good morning! Here's your verse:\n{verse}\n{book} {chapter}:{verse_number}"
             )
         except Exception as e:
             logger.error(f"Error sending verse to {user['user_id']}: {e}")
 
+# Wrapper for Async Function
+def send_morning_verses_sync():
+    asyncio.run(send_morning_verses_async())
+
 # Add Job to Scheduler
-scheduler.add_job(send_morning_verses, "cron", hour=8, minute=0)
+scheduler.add_job(send_morning_verses_sync, "cron", hour=8, minute=0)
 
 # Main Function
 if __name__ == "__main__":
