@@ -71,20 +71,15 @@ def analyze_tone(user_message):
             # Debugging the response structure
             logger.info(f"Response from Hugging Face: {response_data}")
 
-            # Adjust based on the actual response structure
-            if isinstance(response_data, list):
-                sentiment = response_data[0]["label"]
-            else:
-                # If it's not a list, log the issue and return a default tone
-                logger.error(f"Unexpected response structure: {response_data}")
-                sentiment = "neutral"
+            # Correctly accessing the first element in the list
+            sentiment = response_data[0][0]["label"]  # Correct indexing
 
             tone_map = {
-                "very negative": "sadness",
-                "negative": "sadness",
-                "neutral": "neutral",
-                "positive": "joy",
-                "very positive": "joy",
+                "1 star": "sadness",
+                "2 stars": "sadness",
+                "3 stars": "neutral",
+                "4 stars": "joy",
+                "5 stars": "joy",
             }
             return tone_map.get(sentiment, "neutral")
         except requests.HTTPError as e:
