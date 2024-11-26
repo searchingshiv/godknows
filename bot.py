@@ -180,7 +180,7 @@ scheduler.add_job(send_morning_verses_sync, "cron", hour=8, minute=0)
 
 # Main Function
 if __name__ == "__main__":
-    bot_token = os.getenv("7112230953:AAGAzaUtko1v1hlH8--yoyu8g4uiOg1-DFA")  # Ensure the bot token is stored in an environment variable
+    bot_token = os.getenv("BOT_TOKEN")  # Ensure the bot token is stored in an environment variable
     app = ApplicationBuilder().token(bot_token).build()
 
     app.add_handler(CommandHandler("start", start))
