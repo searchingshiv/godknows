@@ -12,6 +12,9 @@ from telegram.ext import (
 from transformers import pipeline
 from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
+import requests
+
+HUGGING_FACE_API_TOKEN = "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"
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -48,10 +51,24 @@ def get_random_verse():
     return f"{text} ({timestamp})", book, chapter, verse
 
 def explain_verse(verse_text, tone="calm"):
-    """Generate an explanation for a verse in a given tone."""
-    prompt = f"Explain this Bible verse in a {tone} and emotional way: {verse_text}"
-    response = ai_model(prompt, max_length=100, num_return_sequences=1)
-    return response[0]["generated_text"]
+    """Generate an explanation for a verse using Hugging Face API."""
+    headers = {
+        "Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"
+    }
+    payload = {
+        "inputs": f"Explain this Bible verse in a {tone} way: {verse_text}",
+        "parameters": {"max_length": 100}
+    }
+    response = requests.post(
+        "https://api-inference.huggingface.co/models/distilgpt2", 
+        headers=headers, 
+        json=payload
+    )
+    if response.status_code == 200:
+        return response.json()[0]["generated_text"]
+    else:
+        return "Sorry, I couldn't generate an explanation right now."
+
 
 async def log_message(context, user_id, user_message, bot_reply):
     """Log user messages and bot replies to the specified channel."""
