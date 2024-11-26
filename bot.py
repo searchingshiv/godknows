@@ -52,7 +52,7 @@ def get_random_verse():
     return f"{verse_text}", book_name, chapter_index + 1, verse_index + 1
 
 def analyze_tone(user_message):
-    """Analyze the tone of the user's message."""
+    """Analyze the tone of the user's message using a sentiment model."""
     headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
     payload = {"inputs": user_message}
     retries = 3
@@ -60,25 +60,29 @@ def analyze_tone(user_message):
     for attempt in range(retries):
         try:
             response = requests.post(
-                "https://api-inference.huggingface.co/models/facebook/bart-large-mnli",
+                "https://api-inference.huggingface.co/models/nlptown/bert-base-multilingual-uncased-sentiment",
                 headers=headers,
                 json=payload,
-                timeout=10  # Set timeout for faster failures
+                timeout=10
             )
             response.raise_for_status()
-            labels = response.json().get("labels", [])
-            tones = ["sadness", "joy", "frustration", "loneliness", "hopeful"]
-            for tone in tones:
-                if tone in labels:
-                    return tone
-            return "neutral"
+            sentiment = response.json()[0]["label"]
+            tone_map = {
+                "very negative": "sadness",
+                "negative": "sadness",
+                "neutral": "neutral",
+                "positive": "joy",
+                "very positive": "joy",
+            }
+            return tone_map.get(sentiment, "neutral")
         except requests.HTTPError as e:
             logger.error(f"Hugging Face API error (attempt {attempt + 1}): {e}")
             time.sleep(2 ** attempt)  # Exponential backoff
     return "neutral"
 
+
 def explain_verse(verse_text, tone="uplifting"):
-    """Generate an explanation for a verse."""
+    """Generate an explanation for a verse using a text generation model."""
     headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
     payload = {
         "inputs": f"Explain this Bible verse in an {tone} way: {verse_text}",
@@ -86,7 +90,7 @@ def explain_verse(verse_text, tone="uplifting"):
     }
     try:
         response = requests.post(
-            "https://api-inference.huggingface.co/models/distilgpt2",
+            "https://api-inference.huggingface.co/models/EleutherAI/gpt-neo-1.3B",
             headers=headers,
             json=payload,
             timeout=10
@@ -96,6 +100,7 @@ def explain_verse(verse_text, tone="uplifting"):
     except requests.RequestException as e:
         logger.error(f"Explanation generation failed: {e}")
         return "This verse speaks deeply to the soul, reflecting God's eternal wisdom."
+
 
 async def log_message(context, user_id, user_message, bot_reply):
     """Log user messages and bot replies."""
