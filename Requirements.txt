@@ -4,3 +4,4 @@ pymongo==4.5.0
 python-telegram-bot[webhooks]
 apscheduler==3.10.1
 numpy==1.26.4
+openai
