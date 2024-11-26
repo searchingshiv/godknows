@@ -66,7 +66,19 @@ def analyze_tone(user_message):
                 timeout=10
             )
             response.raise_for_status()
-            sentiment = response.json()[0]["label"]
+            response_data = response.json()
+
+            # Debugging the response structure
+            logger.info(f"Response from Hugging Face: {response_data}")
+
+            # Adjust based on the actual response structure
+            if isinstance(response_data, list):
+                sentiment = response_data[0]["label"]
+            else:
+                # If it's not a list, log the issue and return a default tone
+                logger.error(f"Unexpected response structure: {response_data}")
+                sentiment = "neutral"
+
             tone_map = {
                 "very negative": "sadness",
                 "negative": "sadness",
@@ -78,7 +90,11 @@ def analyze_tone(user_message):
         except requests.HTTPError as e:
             logger.error(f"Hugging Face API error (attempt {attempt + 1}): {e}")
             time.sleep(2 ** attempt)  # Exponential backoff
-    return "neutral"
+        except Exception as e:
+            logger.error(f"An unexpected error occurred (attempt {attempt + 1}): {e}")
+            time.sleep(2 ** attempt)  # Exponential backoff
+
+    return "neutral"  # Default if all retries fail
 
 
 def explain_verse(verse_text, tone="uplifting"):
