@@ -39,29 +39,35 @@ LOG_CHANNEL_ID = -1002351224104  # Replace with your actual channel ID
 # Helper Functions
 def get_random_verse():
     """Fetch a random Bible verse."""
-    book = random.choice(list(BIBLE.keys()))
-    chapter = random.choice(list(BIBLE[book].keys()))
-    verse = random.choice(list(BIBLE[book][chapter].keys()))
-    text = BIBLE[book][chapter][verse]
+    book_data = random.choice(BIBLE)  # Random book
+    book_name = book_data["abbrev"]
+    chapters = book_data["chapters"]
+    chapter_index = random.randint(0, len(chapters) - 1)
+    verses = chapters[chapter_index]
+    verse_index = random.randint(0, len(verses) - 1)
+    verse_text = verses[verse_index]
     timestamp = datetime.now().strftime("%H:%M")
-    return f"{text} ({timestamp})", book, chapter, verse
+    return (
+        f"{verse_text} ({timestamp})",  # Verse with timestamp
+        book_name,
+        chapter_index + 1,  # 1-based chapter index
+        verse_index + 1,  # 1-based verse index
+    )
 
 def explain_verse(verse_text, tone="calm"):
     """Generate an explanation for a verse using Hugging Face API."""
-    headers = {
-        "Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"
-    }
+    headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
     payload = {
         "inputs": f"Explain this Bible verse in a {tone} way: {verse_text}",
-        "parameters": {"max_length": 100}
+        "parameters": {"max_length": 100},
     }
     try:
         response = requests.post(
-            "https://api-inference.huggingface.co/models/distilgpt2", 
-            headers=headers, 
-            json=payload
+            "https://api-inference.huggingface.co/models/distilgpt2",
+            headers=headers,
+            json=payload,
         )
-        response.raise_for_status()  # Will raise an HTTPError if the response code is not 200
+        response.raise_for_status()
         return response.json()[0]["generated_text"]
     except requests.exceptions.RequestException as e:
         logger.error(f"Failed to generate explanation: {e}")
@@ -99,22 +105,20 @@ async def random_verse(update: Update, context):
 async def plain_text_response(update: Update, context):
     """Handle plain text messages with Bible verses and explanations."""
     user_message = update.message.text
-    # Find a random verse
     verse, book, chapter, verse_number = get_random_verse()
     explanation = explain_verse(verse, tone="calm")
     response = f"{verse}\n\n{explanation}"
     await update.message.reply_text(response)
-    # Log the interaction
     await log_message(context, update.effective_user.id, user_message, response)
 
 # Scheduler Job
-def send_morning_verses():
+async def send_morning_verses(context):
     """Send morning verses to all subscribed users."""
     subscribed_users = users.find({"morning_subscribed": True})
     verse, book, chapter, verse_number = get_random_verse()
     for user in subscribed_users:
         try:
-            context.bot.send_message(
+            await context.bot.send_message(
                 chat_id=user["user_id"],
                 text=f"Good morning! Here's your verse:\n{verse}\n{book} {chapter}:{verse_number}"
             )
