@@ -14,6 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from pymongo import MongoClient
 import asyncio
 import os
+import time
 
 HUGGING_FACE_API_TOKEN = "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"
 
@@ -53,30 +54,33 @@ def get_random_verse():
 def analyze_tone(user_message):
     """Analyze the tone of the user's message."""
     headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
-    payload = {"inputs": f"Analyze the sentiment of this text: {user_message}"}
-    try:
-        response = requests.post(
-            "https://api-inference.huggingface.co/models/facebook/bart-large-mnli",
-            headers=headers,
-            json=payload,
-        )
-        response.raise_for_status()
-        labels = response.json()["labels"]
-        if "sad" in labels:
-            return "sadness"
-        elif "happy" in labels:
-            return "joy"
-        elif "frustrated" in labels:
-            return "frustration"
-        elif "lonely" in labels:
-            return "loneliness"
-        elif "hopeful" in labels:
-            return "hopeful"
-        else:
-            return "neutral"
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to analyze tone: {e}")
-        return "neutral"
+    payload = {"inputs": user_message}
+    retries = 3
+    for attempt in range(retries):
+        try:
+            response = requests.post(
+                "https://api-inference.huggingface.co/models/facebook/bart-large-mnli",
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+            labels = response.json()["labels"]
+            if "sad" in labels:
+                return "sadness"
+            elif "happy" in labels:
+                return "joy"
+            elif "frustrated" in labels:
+                return "frustration"
+            elif "lonely" in labels:
+                return "loneliness"
+            elif "hopeful" in labels:
+                return "hopeful"
+            else:
+                return "neutral"
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to analyze tone (attempt {attempt + 1}): {e}")
+            time.sleep(2 ** attempt)  # Exponential backoff
+    return "neutral"  # Default if all retries fail
 
 def explain_verse(verse_text, tone="uplifting"):
     """Generate an explanation for a verse using Hugging Face API."""
@@ -102,9 +106,10 @@ async def log_message(context, user_id, user_message, bot_reply):
     try:
         await context.bot.send_message(
             chat_id=LOG_CHANNEL_ID,
-            text=f"**User ID**: {user_id}\n"
-                 f"**User Message**: {user_message}\n"
-                 f"**Bot Reply**: {bot_reply}"
+            text=f"<b>User ID:</b> {user_id}\n"
+                 f"<b>User Message:</b> {user_message}\n"
+                 f"<b>Bot Reply:</b> {bot_reply}",
+            parse_mode="HTML"
         )
     except Exception as e:
         logger.error(f"Failed to log message: {e}")
@@ -124,8 +129,8 @@ async def random_verse(update: Update, context):
     """Send a random Bible verse."""
     verse, book, chapter, verse_number = get_random_verse()
     context.user_data["last_verse"] = (verse, book, chapter, verse_number)
-    reply = f"📖 **{book} {chapter}:{verse_number}**\n\n*{verse}*"
-    await update.message.reply_text(reply)
+    reply = f"📖 <b>{book} {chapter}:{verse_number}</b>\n\n<i>{verse}</i>"
+    await update.message.reply_text(reply, parse_mode="HTML")
     await log_message(context, update.effective_user.id, "/random", reply)
 
 async def plain_text_response(update: Update, context):
@@ -144,11 +149,11 @@ async def plain_text_response(update: Update, context):
     }
     explanation = explain_verse(verse, tone=tone_map.get(tone, "uplifting"))
     reply = (
-        f"📖 **{book} {chapter}:{verse_number}**\n\n"
-        f"*{verse}*\n\n"
-        f"💡 *Reflection*: {explanation}"
+        f"📖 <b>{book} {chapter}:{verse_number}</b>\n\n"
+        f"<i>{verse}</i>\n\n"
+        f"💡 <i>Reflection</i>: {explanation}"
     )
-    await update.message.reply_text(reply)
+    await update.message.reply_text(reply, parse_mode="HTML")
     await log_message(context, update.effective_user.id, user_message, reply)
 
 # Scheduler Job
@@ -162,11 +167,12 @@ async def send_morning_verses_async():
             await app.bot.send_message(
                 chat_id=user["user_id"],
                 text=( 
-                    "🌅 **Good Morning!** 🌅\n\n"
+                    "🌅 <b>Good Morning!</b> 🌅\n\n"
                     f"Here's your verse for today:\n\n"
-                    f"📖 **{book} {chapter}:{verse_number}**\n\n"
-                    f"*{verse}*"
-                )
+                    f"📖 <b>{book} {chapter}:{verse_number}</b>\n\n"
+                    f"<i>{verse}</i>"
+                ),
+                parse_mode="HTML"
             )
         except Exception as e:
             logger.error(f"Error sending verse to {user['user_id']}: {e}")
