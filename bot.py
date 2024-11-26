@@ -126,7 +126,7 @@ scheduler.add_job(send_morning_verses, "cron", hour=8, minute=0)
 
 # Main Function
 if __name__ == "__main__":
-    app = ApplicationBuilder().token("YOUR_BOT_API_TOKEN_HERE").build()
+    app = ApplicationBuilder().token("7112230953:AAGAzaUtko1v1hlH8--yoyu8g4uiOg1-DFA").build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("random", random_verse))
