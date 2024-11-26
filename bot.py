@@ -158,10 +158,10 @@ async def send_morning_verses_async():
     verse, book, chapter, verse_number = get_random_verse()
     for user in subscribed_users:
         try:
-            app = ApplicationBuilder().token("7112230953:AAGAzaUtko1v1hlH8--yoyu8g4uiOg1-DFA").build()
+            # Use the global app instance to send the message
             await app.bot.send_message(
                 chat_id=user["user_id"],
-                text=(
+                text=( 
                     "🌅 **Good Morning!** 🌅\n\n"
                     f"Here's your verse for today:\n\n"
                     f"📖 **{book} {chapter}:{verse_number}**\n\n"
@@ -180,7 +180,8 @@ scheduler.add_job(send_morning_verses_sync, "cron", hour=8, minute=0)
 
 # Main Function
 if __name__ == "__main__":
-    app = ApplicationBuilder().token("7112230953:AAGAzaUtko1v1hlH8--yoyu8g4uiOg1-DFA").build()
+    bot_token = os.getenv("7112230953:AAGAzaUtko1v1hlH8--yoyu8g4uiOg1-DFA")  # Ensure the bot token is stored in an environment variable
+    app = ApplicationBuilder().token(bot_token).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("random", random_verse))
@@ -190,6 +191,6 @@ if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
         port=port,
-        url_path="",
-        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/TOKEN"
+        url_path=f"{bot_token}",  # Using the bot token as the URL path
+        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{bot_token}"
     )
