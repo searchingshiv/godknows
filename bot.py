@@ -1,7 +1,7 @@
+import openai
 import logging
 import random
 import json
-from datetime import datetime
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -9,15 +9,14 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
-import requests
-from apscheduler.schedulers.background import BackgroundScheduler
+import os
 from pymongo import MongoClient
 import asyncio
-import os
+from apscheduler.schedulers.background import BackgroundScheduler
 import time
 
-HUGGING_FACE_API_TOKEN = "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"
-
+# Set up OpenAI API key
+openai.api_key = os.getenv("API")
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -36,9 +35,6 @@ users = db["users"]
 scheduler = BackgroundScheduler()
 scheduler.start()
 
-# Logging Channel ID
-LOG_CHANNEL_ID = -1002351224104  # Replace with your actual channel ID
-
 # Helper Functions
 def get_random_verse():
     """Fetch a random Bible verse."""
@@ -51,65 +47,23 @@ def get_random_verse():
     verse_text = verses[verse_index]
     return f"{verse_text}", book_name, chapter_index + 1, verse_index + 1
 
-def analyze_tone(user_message):
-    """Analyze the tone of the user's message using Hugging Face API."""
-    headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
-    payload = {"inputs": user_message}
-    retries = 3
-    for attempt in range(retries):
-        try:
-            # Using a different model for sentiment analysis: distilbert
-            response = requests.post(
-                "https://api-inference.huggingface.co/models/distilbert-base-uncased",
-                headers=headers,
-                json=payload,
-            )
-            response.raise_for_status()
-            sentiment = response.json()[0]["label"]  # Correctly handle the API response
-            if sentiment == "POSITIVE":
-                return "joy"
-            elif sentiment == "NEGATIVE":
-                return "sadness"
-            else:
-                return "neutral"
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to analyze tone (attempt {attempt + 1}): {e}")
-            time.sleep(2 ** attempt)  # Exponential backoff for retries
-    return "neutral"  # Default if all retries fail
-
 def explain_verse(verse_text, tone="uplifting"):
-    """Generate an explanation for a verse using Hugging Face API."""
-    headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
-    payload = {
-        "inputs": f"Explain this Bible verse in an {tone} way: {verse_text}",
-        "parameters": {"max_length": 100},
-    }
+    """Generate an explanation for a verse using OpenAI's GPT-3."""
     try:
-        # You can try other models like `t5-small` or `gpt2`
-        response = requests.post(
-            "https://api-inference.huggingface.co/models/t5-small",
-            headers=headers,
-            json=payload,
+        prompt = f"Explain this Bible verse in an {tone} manner: {verse_text}"
+        
+        response = openai.Completion.create(
+            engine="text-davinci-003",  
+            prompt=prompt,
+            max_tokens=150,
+            temperature=0.7,
         )
-        response.raise_for_status()
-        return response.json()[0]["generated_text"]
-    except requests.exceptions.RequestException as e:
+        
+        explanation = response.choices[0].text.strip()
+        return explanation
+    except Exception as e:
         logger.error(f"Failed to generate explanation: {e}")
         return "I'm sorry, I couldn't generate an explanation at the moment."
-
-
-async def log_message(context, user_id, user_message, bot_reply):
-    """Log user messages and bot replies to the specified channel."""
-    try:
-        await context.bot.send_message(
-            chat_id=LOG_CHANNEL_ID,
-            text=f"<b>User ID:</b> {user_id}\n"
-                 f"<b>User Message:</b> {user_message}\n"
-                 f"<b>Bot Reply:</b> {bot_reply}",
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        logger.error(f"Failed to log message: {e}")
 
 # Command Handlers
 async def start(update: Update, context):
@@ -128,72 +82,28 @@ async def random_verse(update: Update, context):
     context.user_data["last_verse"] = (verse, book, chapter, verse_number)
     reply = f"📖 <b>{book} {chapter}:{verse_number}</b>\n\n<i>{verse}</i>"
     await update.message.reply_text(reply, parse_mode="HTML")
-    await log_message(context, update.effective_user.id, "/random", reply)
 
 async def plain_text_response(update: Update, context):
     """Handle plain text messages with context-aware replies."""
     user_message = update.message.text
-    tone = analyze_tone(user_message)
     verse, book, chapter, verse_number = get_random_verse()
+    tone = "uplifting"  # You can also implement tone analysis if needed
     
-    tone_map = {
-        "sadness": "comforting",
-        "joy": "celebratory",
-        "frustration": "calming",
-        "loneliness": "empathetic",
-        "hopeful": "encouraging",
-        "neutral": "informative",
-    }
-    explanation = explain_verse(verse, tone=tone_map.get(tone, "uplifting"))
+    explanation = explain_verse(verse, tone)
     reply = (
         f"📖 <b>{book} {chapter}:{verse_number}</b>\n\n"
         f"<i>{verse}</i>\n\n"
         f"💡 <i>Reflection</i>: {explanation}"
     )
     await update.message.reply_text(reply, parse_mode="HTML")
-    await log_message(context, update.effective_user.id, user_message, reply)
-
-# Scheduler Job
-async def send_morning_verses_async():
-    """Send morning verses to all subscribed users."""
-    subscribed_users = users.find({"morning_subscribed": True})
-    verse, book, chapter, verse_number = get_random_verse()
-    for user in subscribed_users:
-        try:
-            # Use the global app instance to send the message
-            await app.bot.send_message(
-                chat_id=user["user_id"],
-                text=( 
-                    "🌅 <b>Good Morning!</b> 🌅\n\n"
-                    f"Here's your verse for today:\n\n"
-                    f"📖 <b>{book} {chapter}:{verse_number}</b>\n\n"
-                    f"<i>{verse}</i>"
-                ),
-                parse_mode="HTML"
-            )
-        except Exception as e:
-            logger.error(f"Error sending verse to {user['user_id']}: {e}")
-
-# Wrapper for Async Function
-def send_morning_verses_sync():
-    asyncio.run(send_morning_verses_async())
-
-# Add Job to Scheduler
-scheduler.add_job(send_morning_verses_sync, "cron", hour=8, minute=0)
 
 # Main Function
 if __name__ == "__main__":
-    bot_token = os.getenv("BOT_TOKEN")  # Ensure the bot token is stored in an environment variable
+    bot_token = os.getenv("BOT_TOKEN")
     app = ApplicationBuilder().token(bot_token).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("random", random_verse))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plain_text_response))
 
-    port = int(os.environ.get("PORT", 8443))  # Default to 8443 for local testing
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path=f"{bot_token}",  # Using the bot token as the URL path
-        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{bot_token}"
-    )
+    app.run_polling()
