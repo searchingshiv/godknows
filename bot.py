@@ -7,6 +7,7 @@ from telegram.ext import (
 from telegram.ext.filters import TEXT
 from apscheduler.schedulers.background import BackgroundScheduler
 from googleapiclient.discovery import build
+import requests
 
 # Environment variables
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -17,12 +18,13 @@ LOG_CHANNEL_ID = os.getenv("LOG_CHANNEL_ID")
 scheduler = BackgroundScheduler()
 
 # Function to fetch Bible verse using Google API
-async def get_random_verse():
-    # Replace this with actual API integration for fetching Bible verses
-    service = build('bibleApi', 'v1', developerKey=BIBLE_API_KEY)
-    request = service.verses().random()
-    response = request.execute()
-    return response.get("text", "No verse found.")
+
+
+def get_random_verse():
+    url = "https://bible-api.com/random"
+    response = requests.get(url)
+    verse = response.json()
+    return verse['text']  # Extract the verse text from the response
 
 # Handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
