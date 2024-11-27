@@ -78,7 +78,7 @@ async def button(update: Update, context: CallbackContext):
         await query.edit_message_text(f"Random verse: {verse}")
 
 # Main function to start the bot
-async def main():
+def main():
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # Command handlers
@@ -95,8 +95,7 @@ async def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_to_channel))
 
     # Start the bot
-    await application.run_polling()
+    application.run_polling()  # This handles the event loop internally
 
 if __name__ == '__main__':
-    import asyncio
-    asyncio.run(main())
+    main()
