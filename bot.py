@@ -8,9 +8,11 @@ from telegram.ext import (
     filters,
     InlineQueryHandler,
 )
+import google.generativeai as genai  # Google Generative AI Library
 import schedule
 import time
 import threading
+from flask import Flask
 
 # Logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -21,6 +23,9 @@ BIBLE_API_ENDPOINT = "https://bible-api.com/random-verse"  # Replace with actual
 TELEGRAM_BOT_TOKEN = "7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ"
 LOG_CHANNEL_ID = "-1002351224104"
 
+# Configure Google Generative AI
+genai.configure(api_key=GOOGLE_AI_API_KEY)
+
 # Fetch a random verse from Bible API
 def get_random_verse():
     response = requests.get(BIBLE_API_ENDPOINT)
@@ -29,15 +34,17 @@ def get_random_verse():
         return data['verse'], data['text']
     return "John 3:16", "For God so loved the world..."
 
-# AI-based explanation
+# AI-based explanation using Google Generative AI
 def get_ai_explanation(verse_text):
-    url = "https://generative-ai-api-url.com"
-    headers = {"Authorization": f"Bearer {GOOGLE_AI_API_KEY}"}
-    payload = {"input": f"Explain this Bible verse: {verse_text}"}
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code == 200:
-        return response.json().get("explanation", "Explanation not available.")
-    return "Failed to fetch explanation."
+    try:
+        response = genai.generate_text(
+            model="models/text-bison-001",  # Use appropriate model
+            prompt=f"Explain this Bible verse: {verse_text}"
+        )
+        return response.result  # Return the explanation from AI
+    except Exception as e:
+        logging.error(f"Error generating AI explanation: {e}")
+        return "Explanation not available."
 
 # Handle user messages
 async def handle_message(update: Update, context):
@@ -103,8 +110,6 @@ def run_scheduler(application):
         time.sleep(1)
 
 # Deploy with Flask
-from flask import Flask
-
 app = Flask(__name__)
 
 @app.route("/")
