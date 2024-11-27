@@ -21,7 +21,7 @@ GOOGLE_AI_API_KEY = "AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k"
 BIBLE_API_ENDPOINT = "https://bible-api.com/random-verse"  # Replace with actual endpoint
 TELEGRAM_BOT_TOKEN = "7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ"
 LOG_CHANNEL_ID = "-1002351224104"
-WEBHOOK_URL = "https://godknows-ffu4.onrender.com"  # Replace with your deployment URL
+WEBHOOK_URL = "https://godknows-ffu4.onrender.com/webhook"  # Replace with your deployment URL
 
 # Configure Google Generative AI
 genai.configure(api_key=GOOGLE_AI_API_KEY)
