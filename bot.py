@@ -12,8 +12,8 @@ import google.generativeai as genai  # Google Generative AI Library
 from flask import Flask, request
 import threading
 
-# Logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Logging setup
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
 
 # API Keys (Replace with actual keys)
 GOOGLE_AI_API_KEY = "AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k"
@@ -89,21 +89,10 @@ async def read_bible(update: Update, context):
     else:
         await update.message.reply_text("Could not fetch the requested chapter.")
 
-# Scheduled verse job (using threading)
-def scheduled_verse_job(application):
-    async def job():
-        verse, verse_text = get_random_verse()
-        await application.bot.send_message(
-            chat_id="@all-users-channel",
-            text=f"🌅 Good Morning!\n\n📖 *{verse}*\n_{verse_text}_",
-            parse_mode="Markdown"
-        )
-    
-    threading.Thread(target=job).start()
-
 # Flask webhook endpoint
 @app.route("/webhook", methods=["POST"])
 def webhook():
+    logging.info(f"Received webhook: {request.data}")  # Log the webhook data for debugging
     data = request.get_json(force=True)
     application.update_queue.put(Update.de_json(data, application.bot))
     return "OK", 200
@@ -124,8 +113,13 @@ def start_bot():
 
     # Set webhook
     application.bot.set_webhook(url=WEBHOOK_URL)
+    logging.info(f"Webhook set to: {WEBHOOK_URL}")
+
+    # Check webhook status
+    status = application.bot.get_webhook_info()
+    logging.info(f"Webhook status: {status}")
 
 # Run Flask app
 if __name__ == "__main__":
     start_bot()
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
