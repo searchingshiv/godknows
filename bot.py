@@ -1,114 +1,88 @@
-import logging
+import openai
+from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
+from apscheduler.schedulers.background import BackgroundScheduler
+from datetime import datetime
 import random
-import requests
-from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    filters,
-    InlineQueryHandler,
-)
-import google.generativeai as genai  # Google Generative AI Library
 
-# Logging setup
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
+# Set up OpenAI API key
+openai.api_key = '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'
 
-# API Keys (Replace with actual keys)
-GOOGLE_AI_API_KEY = "AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k"
-BIBLE_API_ENDPOINT = "https://bible-api.com"  # Using base URL
-TELEGRAM_BOT_TOKEN = "7112230953:AAFUPLFTb3z3BMpuwjVnnc1sLkTwBu--8Gc"
-LOG_CHANNEL_ID = "-1002351224104"
+# Define bot token
+TELEGRAM_BOT_TOKEN = '7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ'
 
-# Configure Google Generative AI
-genai.configure(api_key=GOOGLE_AI_API_KEY)
+# Initialize the bot
+updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
+dp = updater.dispatcher
 
-# List of Bible books (simplified list for demonstration, expand as needed)
-bible_books = [
-    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges",
-    "Psalms", "Proverbs", "Isaiah", "Matthew", "Mark", "Luke", "John", "Acts", "Romans"
-]
+# Log user messages and bot responses to a channel
+LOG_CHANNEL = '@yourlogchannel'
 
-# Fetch a random verse from Bible API (randomly choosing book, chapter, and verse)
-def get_random_verse():
-    book = random.choice(bible_books)
-    chapter = random.randint(1, 50)  # Example: Choose a random chapter between 1 and 50
-    verse = random.randint(1, 30)  # Example: Choose a random verse between 1 and 30
+def log_to_channel(message, reply):
+    """Logs the user message and bot reply to the channel"""
+    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    log_message = f"User: {message}\nBot: {reply}"
+    bot.send_message(chat_id=LOG_CHANNEL, text=log_message)
 
-    # Construct the API URL for the random verse
-    url = f"{BIBLE_API_ENDPOINT}/{book}+{chapter}:{verse}"
-    response = requests.get(url)
-
-    if response.status_code == 200:
-        data = response.json()
-        return data['reference'], data['text']
-    return "John 3:16", "For God so loved the world..."  # Default fallback
-
-# AI-based explanation using Google Generative AI
-def get_ai_explanation(verse_text):
-    try:
-        response = genai.generate_text(
-            model="gemini-1.5-flash",  # Use appropriate model
-            prompt=f"Explain this Bible verse: {verse_text}",
-        )
-        return response.candidates[0].output  # Return the explanation from AI
-    except Exception as e:
-        logging.error(f"Error generating AI explanation: {e}")
-        return "Explanation not available."
-
-# Handle user messages
-async def handle_message(update: Update, context):
-    user_message = update.message.text
-    # Log the user message
-    await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"User: {user_message}")
-    
-    # Fetch a relevant Bible verse
-    verse, verse_text = get_random_verse()
-    explanation = get_ai_explanation(verse_text)
-    
-    # Respond to the user
-    response = f"📖 *{verse}*\n_{verse_text}_\n\n💡 *Explanation:*\n{explanation}"
-    await update.message.reply_text(response, parse_mode="Markdown")
-    # Log bot's response
-    await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"Bot: {response}")
-
-# Inline Query Handler
-async def inline_query(update: Update, context):
-    query = update.inline_query.query
-    if query == "":
-        return
-    verse, verse_text = get_random_verse()
-    results = [
-        InlineQueryResultArticle(
-            id="1",
-            title=verse,
-            input_message_content=InputTextMessageContent(f"📖 *{verse}*\n_{verse_text}_", parse_mode="Markdown")
-        )
+# Send a random Bible verse
+def get_random_bible_verse():
+    bible_verses = [
+        # List of Bible verses
+        "John 3:16 - For God so loved the world...",
+        "Philippians 4:13 - I can do all things through Christ who strengthens me.",
+        # Add more verses
     ]
-    await update.inline_query.answer(results)
+    return random.choice(bible_verses)
 
-# Read Bible Command (for specific chapters)
-async def read_bible(update: Update, context):
-    chapter = " ".join(context.args) or "Genesis 1"
-    response = requests.get(f"{BIBLE_API_ENDPOINT}/read?chapter={chapter}")
-    if response.status_code == 200:
-        chapter_text = response.json().get("text", "Chapter not available.")
-        await update.message.reply_text(f"📖 *{chapter}*\n{chapter_text}", parse_mode="Markdown")
+# Get Bible verse explanation using OpenAI
+def get_bible_explanation(verse):
+    prompt = f"Explain the meaning of the Bible verse: {verse}"
+    response = openai.Completion.create(
+        engine="text-davinci-003", prompt=prompt, max_tokens=150
+    )
+    return response.choices[0].text.strip()
+
+# Handle text messages
+def handle_message(update, context):
+    user_message = update.message.text
+    bot = context.bot
+    user_id = update.message.chat_id
+
+    if user_message.lower() in ["happy", "sad", "confused"]:  # Example feelings
+        verse = get_random_bible_verse()
+        explanation = get_bible_explanation(verse)
+        reply = f"Feeling {user_message}? Here's a verse for you: {verse}\nExplanation: {explanation}"
     else:
-        await update.message.reply_text("Could not fetch the requested chapter.")
+        verse = get_random_bible_verse()
+        explanation = get_bible_explanation(verse)
+        reply = f"Here's a verse for you: {verse}\nExplanation: {explanation}"
 
-# Start the bot with polling
-def start_bot():
-    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-    
-    # Add handlers
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    application.add_handler(CommandHandler("read", read_bible))
-    application.add_handler(InlineQueryHandler(inline_query))
+    bot.send_message(chat_id=user_id, text=reply)
+    log_to_channel(user_message, reply)
 
-    # Start polling for updates
-    application.run_polling()
+# Send a scheduled Bible verse every morning
+def send_morning_verse(context):
+    bot = context.bot
+    chat_id = context.job.context
+    verse = get_random_bible_verse()
+    explanation = get_bible_explanation(verse)
+    bot.send_message(chat_id=chat_id, text=f"Good morning! Here's your Bible verse: {verse}\nExplanation: {explanation}")
 
-if __name__ == "__main__":
-    # Start the bot
-    start_bot()
+def start(update, context):
+    user_id = update.message.chat_id
+    context.job_queue.run_daily(send_morning_verse, time=datetime.time(7, 0, 0), context=user_id)
+    update.message.reply_text("Welcome! I will send you a Bible verse every morning.")
+
+def random_verse(update, context):
+    verse = get_random_bible_verse()
+    explanation = get_bible_explanation(verse)
+    update.message.reply_text(f"Here's a random Bible verse: {verse}\nExplanation: {explanation}")
+
+# Add handlers
+dp.add_handler(CommandHandler("start", start))
+dp.add_handler(CommandHandler("randomverse", random_verse))
+dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+
+# Start the bot
+updater.start_polling()
+updater.idle()
