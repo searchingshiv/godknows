@@ -11,6 +11,7 @@ from telegram.ext import (
 import google.generativeai as genai  # Google Generative AI Library
 from flask import Flask, request
 import threading
+import asyncio
 
 # Logging setup
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
@@ -101,8 +102,8 @@ def webhook():
 def home():
     return "Bible Bot is running!"
 
-# Start the bot
-def start_bot():
+# Start the bot with asyncio
+async def start_bot():
     global application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
@@ -111,15 +112,27 @@ def start_bot():
     application.add_handler(CommandHandler("read", read_bible))
     application.add_handler(InlineQueryHandler(inline_query))
 
-    # Set webhook
-    application.bot.set_webhook(url=WEBHOOK_URL)
+    # Set webhook (await the coroutine properly)
+    await application.bot.set_webhook(url=WEBHOOK_URL)
     logging.info(f"Webhook set to: {WEBHOOK_URL}")
 
-    # Check webhook status
-    status = application.bot.get_webhook_info()
+    # Check webhook status (await the coroutine properly)
+    status = await application.bot.get_webhook_info()
     logging.info(f"Webhook status: {status}")
 
-# Run Flask app
-if __name__ == "__main__":
-    start_bot()
+# Run Flask app in a separate thread
+def run_flask():
     app.run(host="0.0.0.0", port=5000, debug=True)
+
+# Run both bot and Flask
+def run():
+    # Run Flask app in a separate thread
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
+
+    # Run the bot with asyncio
+    asyncio.run(start_bot())
+
+if __name__ == "__main__":
+    run()
