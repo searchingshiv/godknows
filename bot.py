@@ -31,10 +31,21 @@ def get_explanation_from_gemini(text):
 
 # Function to get a random Bible verse (using Bible.com API)
 def get_random_bible_verse():
-    url = 'https://bible.com/api/v1/verses/random'
-    response = requests.get(url)
-    verse = response.json()
-    return verse['verse']['text']
+    url = 'https://bible.com/api/v1/verses/random'  # Ensure this is correct
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for non-2xx responses
+        # Check if response is empty or not JSON
+        if response.text.strip() == '':
+            raise ValueError("Empty response from Bible API")
+        verse = response.json()  # Try parsing the response as JSON
+        return verse.get('verse', {}).get('text', 'No verse found')  # Adjust depending on response structure
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching random Bible verse: {e}")
+        return "Sorry, I couldn't fetch a verse right now."
+    except ValueError as e:
+        logger.error(f"Error parsing response: {e}")
+        return "Sorry, there was an error processing the verse."
 
 # Function to handle user messages (dynamic without chat_id)
 def handle_message(update: Update, context: CallbackContext):
