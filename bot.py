@@ -2,11 +2,10 @@ import logging
 import requests
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import (
-    Updater,
+    Application,
     CommandHandler,
     MessageHandler,
-    Filters,
-    CallbackContext,
+    filters,
     InlineQueryHandler,
 )
 import schedule
@@ -41,42 +40,42 @@ def get_ai_explanation(verse_text):
     return "Failed to fetch explanation."
 
 # Handle user messages
-def handle_message(update: Update, context: CallbackContext):
+async def handle_message(update: Update, context):
     user_message = update.message.text
     # Log the user message
-    context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"User: {user_message}")
+    await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"User: {user_message}")
     
     # Fetch a relevant Bible verse
-    verse, verse_text = get_random_verse()  # Add keyword filtering if API allows
+    verse, verse_text = get_random_verse()
     explanation = get_ai_explanation(verse_text)
     
     # Respond to the user
     response = f"📖 *{verse}*\n_{verse_text}_\n\n💡 *Explanation:*\n{explanation}"
-    update.message.reply_text(response, parse_mode="Markdown")
+    await update.message.reply_text(response, parse_mode="Markdown")
     # Log bot's response
-    context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"Bot: {response}")
+    await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"Bot: {response}")
 
 # Send a scheduled verse
-def scheduled_verse_job(context: CallbackContext):
+async def scheduled_verse_job(context):
     verse, verse_text = get_random_verse()
-    context.bot.send_message(
+    await context.bot.send_message(
         chat_id="@all-users-channel",  # Replace with dynamic user list if needed
         text=f"🌅 Good Morning!\n\n📖 *{verse}*\n_{verse_text}_",
         parse_mode="Markdown"
     )
 
 # Command to read the Bible
-def read_bible(update: Update, context: CallbackContext):
+async def read_bible(update: Update, context):
     chapter = " ".join(context.args) or "Genesis 1"  # Default to Genesis 1
     response = requests.get(f"{BIBLE_API_ENDPOINT}/read?chapter={chapter}")
     if response.status_code == 200:
         chapter_text = response.json().get("text", "Chapter not available.")
-        update.message.reply_text(f"📖 *{chapter}*\n{chapter_text}", parse_mode="Markdown")
+        await update.message.reply_text(f"📖 *{chapter}*\n{chapter_text}", parse_mode="Markdown")
     else:
-        update.message.reply_text("Could not fetch the requested chapter.")
+        await update.message.reply_text("Could not fetch the requested chapter.")
 
 # Inline Query Handler
-def inline_query(update: Update, context: CallbackContext):
+async def inline_query(update: Update, context):
     query = update.inline_query.query
     if query == "":
         return
@@ -88,15 +87,23 @@ def inline_query(update: Update, context: CallbackContext):
             input_message_content=InputTextMessageContent(f"📖 *{verse}*\n_{verse_text}_", parse_mode="Markdown")
         )
     ]
-    update.inline_query.answer(results)
+    await update.inline_query.answer(results)
 
 # Schedule daily verses
-def run_scheduler(updater):
-    job_queue = updater.job_queue
-    job_queue.run_daily(scheduled_verse_job, time=time(8, 0))  # 8:00 AM
+def run_scheduler(application):
+    async def scheduler_job():
+        context = application.bot
+        job_queue = application.job_queue
+        await scheduled_verse_job(context)
+    
+    schedule.every().day.at("08:00").do(scheduler_job)  # Schedule for 8:00 AM
+
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
 
 # Deploy with Flask
-from flask import Flask, request
+from flask import Flask
 
 app = Flask(__name__)
 
@@ -105,19 +112,19 @@ def home():
     return "Bible Bot is running!"
 
 def start_bot():
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
-    dispatcher = updater.dispatcher
+    # Initialize the application
+    application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
-    dispatcher.add_handler(CommandHandler("read", read_bible))
-    dispatcher.add_handler(InlineQueryHandler(inline_query))
+    # Add handlers
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    application.add_handler(CommandHandler("read", read_bible))
+    application.add_handler(InlineQueryHandler(inline_query))
     
     # Start the scheduler in a separate thread
-    threading.Thread(target=run_scheduler, args=(updater,)).start()
+    threading.Thread(target=run_scheduler, args=(application,), daemon=True).start()
     
-    # Start polling
-    updater.start_polling()
-    updater.idle()
+    # Run the bot
+    application.run_polling()
 
 if __name__ == "__main__":
     start_bot()
