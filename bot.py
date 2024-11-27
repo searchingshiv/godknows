@@ -1,8 +1,8 @@
 import logging
 import requests
-from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, CallbackQueryHandler, CallbackContext
-from telegram.ext.filters import Filters  # Updated import for Filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, CallbackContext
+from telegram.ext import filters  # Updated import for filters
 
 # Set up logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -51,54 +51,52 @@ def log_to_channel(update: Update, context: CallbackContext):
     context.bot.send_message(chat_id=channel_id, text=f"User: {user_message}\nBot: {bot_reply.text}")
 
 # Command for starting the bot
-def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: CallbackContext):
     user = update.message.from_user
-    update.message.reply_text(f"Hello {user.first_name}! I'm your Bible Bot. How can I help you today?")
-    context.bot.send_message(chat_id=update.message.chat_id, text="You can ask me for a verse, or tell me your feelings!")
+    await update.message.reply_text(f"Hello {user.first_name}! I'm your Bible Bot. How can I help you today?")
+    await update.message.reply_text("You can ask me for a verse, or tell me your feelings!")
 
 # Command for asking for a random verse
-def random_verse(update: Update, context: CallbackContext):
+async def random_verse(update: Update, context: CallbackContext):
     verse = get_random_bible_verse()
-    update.message.reply_text(f"Here's a random verse for you: {verse}")
+    await update.message.reply_text(f"Here's a random verse for you: {verse}")
 
 # Inline button example (for additional options)
-def inline_options(update: Update, context: CallbackContext):
+async def inline_options(update: Update, context: CallbackContext):
     keyboard = [
         [InlineKeyboardButton("Send me a random verse", callback_data='random_verse')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text("Here are your options:", reply_markup=reply_markup)
+    await update.message.reply_text("Here are your options:", reply_markup=reply_markup)
 
-def button(update: Update, context: CallbackContext):
+async def button(update: Update, context: CallbackContext):
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     if query.data == 'random_verse':
         verse = get_random_bible_verse()
-        query.edit_message_text(f"Random verse: {verse}")
+        await query.edit_message_text(f"Random verse: {verse}")
 
 # Main function to start the bot
-def main():
-    updater = Updater(TELEGRAM_TOKEN)
-    dp = updater.dispatcher
+async def main():
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # Command handlers
-    dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("random_verse", random_verse))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("random_verse", random_verse))
     
     # Message handler for user input (dynamic)
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
     # Inline button handler
-    dp.add_handler(CallbackQueryHandler(button))
+    application.add_handler(CallbackQueryHandler(button))
     
     # Logging handler
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, log_to_channel))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_to_channel))
 
     # Start the bot
-    updater.start_polling()
-
-    updater.idle()
+    await application.run_polling()
 
 if __name__ == '__main__':
-    main()
+    import asyncio
+    asyncio.run(main())
