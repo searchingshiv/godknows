@@ -34,7 +34,7 @@ def get_random_verse():
 def get_ai_explanation(verse_text):
     try:
         response = genai.generate_text(
-            model = genai.GenerativeModel("gemini-1.5-flash"),  # Use appropriate model
+            model = "gemini-1.5-flash",  # Use appropriate model
             prompt=f"Explain this Bible verse: {verse_text}",
         )
         return response.candidates[0].output  # Return the explanation from AI
