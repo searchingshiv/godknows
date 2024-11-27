@@ -1,112 +1,123 @@
 import logging
 import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, CallbackContext
-from telegram.ext import filters  # Updated import for filters
+from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
+from telegram.ext import (
+    Updater,
+    CommandHandler,
+    MessageHandler,
+    Filters,
+    CallbackContext,
+    InlineQueryHandler,
+)
+import schedule
+import time
+import threading
 
-# Set up logging
+# Logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-# Telegram bot token
-TELEGRAM_TOKEN = '7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ'
+# API Keys (Replace with actual keys)
+GOOGLE_AI_API_KEY = "AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k"
+BIBLE_API_ENDPOINT = "https://api.bible.com/random-verse"  # Replace with actual endpoint
+TELEGRAM_BOT_TOKEN = "7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ"
+LOG_CHANNEL_ID = "-1002351224104"
 
-# Gemini API (Google's AI API) setup
-GEMINI_API_KEY = 'AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k'  # API Key for Google Gemini
+# Fetch a random verse from Bible API
+def get_random_verse():
+    response = requests.get(BIBLE_API_ENDPOINT)
+    if response.status_code == 200:
+        data = response.json()
+        return data['verse'], data['text']
+    return "John 3:16", "For God so loved the world..."
 
-# Function to call Gemini API for text analysis (NLP)
-def get_explanation_from_gemini(text):
-    url = "https://gemini.googleapis.com/v1/ai/response"
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': f'Bearer {GEMINI_API_KEY}',
-    }
-    data = {
-        "query": text,
-        "model": "text-davinci-003",  # Specify model (you can change based on your requirements)
-    }
-    response = requests.post(url, json=data, headers=headers)
-    explanation = response.json().get("response", "Sorry, I couldn't understand that.")
-    return explanation
+# AI-based explanation
+def get_ai_explanation(verse_text):
+    url = "https://generative-ai-api-url.com"
+    headers = {"Authorization": f"Bearer {GOOGLE_AI_API_KEY}"}
+    payload = {"input": f"Explain this Bible verse: {verse_text}"}
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code == 200:
+        return response.json().get("explanation", "Explanation not available.")
+    return "Failed to fetch explanation."
 
-# Function to get a random Bible verse (using Bible.com API)
-def get_random_bible_verse():
-    url = 'https://bible.com/api/v1/verses/random'  # Ensure this is correct
-    try:
-        response = requests.get(url)
-        response.raise_for_status()  # Raise an error for non-2xx responses
-        # Check if response is empty or not JSON
-        if response.text.strip() == '':
-            raise ValueError("Empty response from Bible API")
-        verse = response.json()  # Try parsing the response as JSON
-        return verse.get('verse', {}).get('text', 'No verse found')  # Adjust depending on response structure
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching random Bible verse: {e}")
-        return "Sorry, I couldn't fetch a verse right now."
-    except ValueError as e:
-        logger.error(f"Error parsing response: {e}")
-        return "Sorry, there was an error processing the verse."
-
-# Function to handle user messages (dynamic without chat_id)
+# Handle user messages
 def handle_message(update: Update, context: CallbackContext):
-    user_text = update.message.text
-    explanation = get_explanation_from_gemini(user_text)  # AI-based explanation from Gemini
-    verse = get_random_bible_verse()  # Get a random Bible verse
-    update.message.reply_text(f"Here's a random Bible verse for you:\n{verse}\n\nExplanation (from AI):\n{explanation}")
-
-# Logging user messages and bot replies (optional)
-def log_to_channel(update: Update, context: CallbackContext):
     user_message = update.message.text
-    bot_reply = context.bot.send_message(chat_id=update.message.chat_id, text=user_message)
-    channel_id = '-1002351224104'  # Replace with your channel ID
-    context.bot.send_message(chat_id=channel_id, text=f"User: {user_message}\nBot: {bot_reply.text}")
+    # Log the user message
+    context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"User: {user_message}")
+    
+    # Fetch a relevant Bible verse
+    verse, verse_text = get_random_verse()  # Add keyword filtering if API allows
+    explanation = get_ai_explanation(verse_text)
+    
+    # Respond to the user
+    response = f"📖 *{verse}*\n_{verse_text}_\n\n💡 *Explanation:*\n{explanation}"
+    update.message.reply_text(response, parse_mode="Markdown")
+    # Log bot's response
+    context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"Bot: {response}")
 
-# Command for starting the bot
-async def start(update: Update, context: CallbackContext):
-    user = update.message.from_user
-    await update.message.reply_text(f"Hello {user.first_name}! I'm your Bible Bot. How can I help you today?")
-    await update.message.reply_text("You can ask me for a verse, or tell me your feelings!")
+# Send a scheduled verse
+def scheduled_verse_job(context: CallbackContext):
+    verse, verse_text = get_random_verse()
+    context.bot.send_message(
+        chat_id="@all-users-channel",  # Replace with dynamic user list if needed
+        text=f"🌅 Good Morning!\n\n📖 *{verse}*\n_{verse_text}_",
+        parse_mode="Markdown"
+    )
 
-# Command for asking for a random verse
-async def random_verse(update: Update, context: CallbackContext):
-    verse = get_random_bible_verse()
-    await update.message.reply_text(f"Here's a random verse for you: {verse}")
+# Command to read the Bible
+def read_bible(update: Update, context: CallbackContext):
+    chapter = " ".join(context.args) or "Genesis 1"  # Default to Genesis 1
+    response = requests.get(f"{BIBLE_API_ENDPOINT}/read?chapter={chapter}")
+    if response.status_code == 200:
+        chapter_text = response.json().get("text", "Chapter not available.")
+        update.message.reply_text(f"📖 *{chapter}*\n{chapter_text}", parse_mode="Markdown")
+    else:
+        update.message.reply_text("Could not fetch the requested chapter.")
 
-# Inline button example (for additional options)
-async def inline_options(update: Update, context: CallbackContext):
-    keyboard = [
-        [InlineKeyboardButton("Send me a random verse", callback_data='random_verse')],
+# Inline Query Handler
+def inline_query(update: Update, context: CallbackContext):
+    query = update.inline_query.query
+    if query == "":
+        return
+    verse, verse_text = get_random_verse()  # Placeholder for actual inline functionality
+    results = [
+        InlineQueryResultArticle(
+            id="1",
+            title=verse,
+            input_message_content=InputTextMessageContent(f"📖 *{verse}*\n_{verse_text}_", parse_mode="Markdown")
+        )
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Here are your options:", reply_markup=reply_markup)
+    update.inline_query.answer(results)
 
-async def button(update: Update, context: CallbackContext):
-    query = update.callback_query
-    await query.answer()
-    
-    if query.data == 'random_verse':
-        verse = get_random_bible_verse()
-        await query.edit_message_text(f"Random verse: {verse}")
+# Schedule daily verses
+def run_scheduler(updater):
+    job_queue = updater.job_queue
+    job_queue.run_daily(scheduled_verse_job, time=time(8, 0))  # 8:00 AM
 
-# Main function to start the bot
-def main():
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    # Command handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("random_verse", random_verse))
-    
-    # Message handler for user input (dynamic)
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    
-    # Inline button handler
-    application.add_handler(CallbackQueryHandler(button))
-    
-    # Logging handler
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, log_to_channel))
+# Deploy with Flask
+from flask import Flask, request
 
-    # Start the bot
-    application.run_polling()  # This handles the event loop internally
+app = Flask(__name__)
 
-if __name__ == '__main__':
-    main()
+@app.route("/")
+def home():
+    return "Bible Bot is running!"
+
+def start_bot():
+    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    dispatcher = updater.dispatcher
+    
+    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+    dispatcher.add_handler(CommandHandler("read", read_bible))
+    dispatcher.add_handler(InlineQueryHandler(inline_query))
+    
+    # Start the scheduler in a separate thread
+    threading.Thread(target=run_scheduler, args=(updater,)).start()
+    
+    # Start polling
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    start_bot()
