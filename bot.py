@@ -122,7 +122,8 @@ async def start_bot():
 
 # Run Flask app in a separate thread
 def run_flask():
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # Start the Flask app without the reloader
+    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
 
 # Run both bot and Flask
 def run():
