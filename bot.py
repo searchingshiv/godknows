@@ -9,9 +9,6 @@ from telegram.ext import (
     InlineQueryHandler,
 )
 import google.generativeai as genai  # Google Generative AI Library
-from flask import Flask, request
-import threading
-import asyncio
 
 # Logging setup
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.DEBUG)
@@ -21,13 +18,9 @@ GOOGLE_AI_API_KEY = "AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k"
 BIBLE_API_ENDPOINT = "https://bible-api.com/random-verse"  # Replace with actual endpoint
 TELEGRAM_BOT_TOKEN = "7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ"
 LOG_CHANNEL_ID = "-1002351224104"
-WEBHOOK_URL = "https://t.me/Rae_Bible_bot"  # Replace with your deployment URL
 
 # Configure Google Generative AI
 genai.configure(api_key=GOOGLE_AI_API_KEY)
-
-# Flask app
-app = Flask(__name__)
 
 # Fetch a random verse from Bible API
 def get_random_verse():
@@ -90,21 +83,8 @@ async def read_bible(update: Update, context):
     else:
         await update.message.reply_text("Could not fetch the requested chapter.")
 
-# Flask webhook endpoint
-@app.route("/webhook", methods=["POST"])
-def webhook():
-    logging.info(f"Received webhook: {request.data}")  # Log the webhook data for debugging
-    data = request.get_json(force=True)
-    application.update_queue.put(Update.de_json(data, application.bot))
-    return "OK", 200
-
-@app.route("/")
-def home():
-    return "Bible Bot is running!"
-
-# Start the bot with asyncio
+# Start the bot with polling
 async def start_bot():
-    global application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     # Add handlers
@@ -112,28 +92,10 @@ async def start_bot():
     application.add_handler(CommandHandler("read", read_bible))
     application.add_handler(InlineQueryHandler(inline_query))
 
-    # Set webhook (await the coroutine properly)
-    await application.bot.set_webhook(url=WEBHOOK_URL)
-    logging.info(f"Webhook set to: {WEBHOOK_URL}")
-
-    # Check webhook status (await the coroutine properly)
-    status = await application.bot.get_webhook_info()
-    logging.info(f"Webhook status: {status}")
-
-# Run Flask app in a separate thread
-def run_flask():
-    # Start the Flask app without the reloader
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=False)
-
-# Run both bot and Flask
-def run():
-    # Run Flask app in a separate thread
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # Run the bot with asyncio
-    asyncio.run(start_bot())
+    # Start polling for updates
+    await application.run_polling()
 
 if __name__ == "__main__":
-    run()
+    # Start the bot
+    import asyncio
+    asyncio.run(start_bot())
