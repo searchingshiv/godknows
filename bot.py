@@ -1,212 +1,91 @@
-import logging
-import random
-import json
-from datetime import datetime
-from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    filters,
-)
-import requests
-from apscheduler.schedulers.background import BackgroundScheduler
-from pymongo import MongoClient
-import asyncio
 import os
-import time
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import (
+    Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+)
+from apscheduler.schedulers.background import BackgroundScheduler
+from googleapiclient.discovery import build  # Replace with your Google API client
 
-HUGGING_FACE_API_TOKEN = "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"
+# Environment variables
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+BIBLE_API_KEY = os.getenv("BIBLE_API_KEY")
+LOG_CHANNEL_ID = os.getenv("LOG_CHANNEL_ID")
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# Load KJV Bible Data
-with open("kjv.json") as f:
-    BIBLE = json.load(f)
-
-# MongoDB Setup
-MONGO_URI = "mongodb+srv://bible:bible@cluster0.uc77o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
-db_client = MongoClient(MONGO_URI)
-db = db_client["bible_bot"]
-users = db["users"]
-
-# Scheduler Setup
+# Scheduler
 scheduler = BackgroundScheduler()
-scheduler.start()
 
-# Logging Channel ID
-LOG_CHANNEL_ID = -1002351224104  # Replace with your actual channel ID
-
-# Helper Functions
+# Function to fetch Bible verse using Google API
 def get_random_verse():
-    """Fetch a random Bible verse."""
-    book_data = random.choice(BIBLE)
-    book_name = book_data["abbrev"]
-    chapters = book_data["chapters"]
-    chapter_index = random.randint(0, len(chapters) - 1)
-    verses = chapters[chapter_index]
-    verse_index = random.randint(0, len(verses) - 1)
-    verse_text = verses[verse_index]
-    return f"{verse_text}", book_name, chapter_index + 1, verse_index + 1
+    # Replace this with actual API integration for fetching Bible verses
+    service = build('bibleApi', 'v1', developerKey=BIBLE_API_KEY)
+    request = service.verses().random()
+    response = request.execute()
+    return response.get("text", "No verse found.")
 
-def analyze_tone(user_message):
-    """Analyze the tone of the user's message using a sentiment model."""
-    headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
-    payload = {"inputs": user_message}
-    retries = 3
-
-    for attempt in range(retries):
-        try:
-            response = requests.post(
-                "https://api-inference.huggingface.co/models/nlptown/bert-base-multilingual-uncased-sentiment",
-                headers=headers,
-                json=payload,
-                timeout=10
-            )
-            response.raise_for_status()
-            response_data = response.json()
-
-            # Debugging the response structure
-            logger.info(f"Response from Hugging Face: {response_data}")
-
-            # Correctly accessing the first element in the list
-            sentiment = response_data[0][0]["label"]  # Correct indexing
-
-            tone_map = {
-                "1 star": "sadness",
-                "2 stars": "sadness",
-                "3 stars": "neutral",
-                "4 stars": "joy",
-                "5 stars": "joy",
-            }
-            return tone_map.get(sentiment, "neutral")
-        except requests.HTTPError as e:
-            logger.error(f"Hugging Face API error (attempt {attempt + 1}): {e}")
-            time.sleep(2 ** attempt)  # Exponential backoff
-        except Exception as e:
-            logger.error(f"An unexpected error occurred (attempt {attempt + 1}): {e}")
-            time.sleep(2 ** attempt)  # Exponential backoff
-
-    return "neutral"  # Default if all retries fail
-
-
-def explain_verse(verse_text, tone="uplifting"):
-    """Generate an explanation for a verse using Hugging Face API with a fallback."""
-    headers = {"Authorization": f"Bearer {HUGGING_FACE_API_TOKEN}"}
-    payload = {
-        "inputs": f"Explain this Bible verse in an {tone} way: {verse_text}",
-        "parameters": {"max_length": 100},
-    }
-    try:
-        response = requests.post(
-            "https://api-inference.huggingface.co/models/distilgpt2",  # Change model here
-            headers=headers,
-            json=payload,
-        )
-        response.raise_for_status()
-        return response.json()[0]["generated_text"]
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to generate explanation: {e}")
-        return "I'm sorry, I couldn't generate an explanation at the moment. Please try again later."
-    except Exception as e:
-        logger.error(f"Unexpected error while generating explanation: {e}")
-        return "An unexpected error occurred while generating the explanation."
-
-
-async def log_message(context, user_id, user_message, bot_reply):
-    """Log user messages and bot replies."""
-    log_text = (
-        f"<b>User ID:</b> {user_id}\n"
-        f"<b>User Message:</b> {user_message}\n"
-        f"<b>Bot Reply:</b> {bot_reply}"
-    )
-    try:
-        await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=log_text, parse_mode="HTML")
-    except Exception as e:
-        logger.error(f"Failed to log message: {e}")
-
-# Command Handlers
-async def start(update: Update, context):
-    """Start command handler."""
+# Handlers
+def start(update: Update, context: CallbackContext):
     user = update.effective_user
-    if not users.find_one({"user_id": user.id}):
-        users.insert_one({"user_id": user.id, "username": user.username, "morning_subscribed": True})
-    await update.message.reply_text(
-        "🌟 Welcome to the KJV Bible Bot! 🌟\n\n"
-        "Feel free to share your thoughts or ask questions, and I'll respond with a meaningful Bible verse to uplift your spirit."
+    welcome_message = (
+        f"Welcome, {user.first_name}! 🙏\n"
+        "This bot sends daily Bible verses and answers your spiritual questions.\n\n"
+        "Commands:\n"
+        "/verse - Get a random Bible verse\n"
+        "/ask [your question or feeling] - Receive a relevant verse with an explanation\n"
+        "/schedule - Schedule daily Bible verses"
     )
+    update.message.reply_text(welcome_message)
+    # Log user interaction
+    context.bot.send_message(LOG_CHANNEL_ID, f"User {user.id} started the bot.")
 
-async def random_verse(update: Update, context):
-    """Send a random Bible verse."""
-    verse, book, chapter, verse_number = get_random_verse()
-    context.user_data["last_verse"] = (verse, book, chapter, verse_number)
-    reply = f"📖 <b>{book} {chapter}:{verse_number}</b>\n\n<i>{verse}</i>"
-    await update.message.reply_text(reply, parse_mode="HTML")
-    await log_message(context, update.effective_user.id, "/random", reply)
+def send_random_verse(context: CallbackContext):
+    chat_id = context.job.context
+    verse = get_random_verse()
+    context.bot.send_message(chat_id=chat_id, text=f"Good morning! 🌞 Here's a verse:\n\n{verse}")
 
-async def plain_text_response(update: Update, context):
-    """Handle plain text messages with context-aware replies."""
-    user_message = update.message.text
-    tone = analyze_tone(user_message)
-    verse, book, chapter, verse_number = get_random_verse()
-    
-    tone_map = {
-        "sadness": "comforting",
-        "joy": "celebratory",
-        "frustration": "calming",
-        "loneliness": "empathetic",
-        "hopeful": "encouraging",
-        "neutral": "informative",
-    }
-    explanation = explain_verse(verse, tone=tone_map.get(tone, "uplifting"))
-    reply = (
-        f"📖 <b>{book} {chapter}:{verse_number}</b>\n\n"
-        f"<i>{verse}</i>\n\n"
-        f"💡 <i>Reflection</i>: {explanation}"
-    )
-    await update.message.reply_text(reply, parse_mode="HTML")
-    await log_message(context, update.effective_user.id, user_message, reply)
+def schedule_verse(update: Update, context: CallbackContext):
+    chat_id = update.effective_chat.id
+    scheduler.add_job(send_random_verse, 'cron', hour=8, context=chat_id, id=str(chat_id))
+    update.message.reply_text("Daily Bible verses scheduled at 8:00 AM! 🌅")
+    # Log the scheduling
+    context.bot.send_message(LOG_CHANNEL_ID, f"User {update.effective_user.id} scheduled daily verses.")
 
-# Scheduler Job
-async def send_morning_verses_async():
-    """Send morning verses to all subscribed users."""
-    subscribed_users = users.find({"morning_subscribed": True})
-    verse, book, chapter, verse_number = get_random_verse()
-    for user in subscribed_users:
-        try:
-            await app.bot.send_message(
-                chat_id=user["user_id"],
-                text=(
-                    f"🌅 <b>Good Morning!</b>\n\n"
-                    f"📖 <b>{book} {chapter}:{verse_number}</b>\n<i>{verse}</i>"
-                ),
-                parse_mode="HTML"
-            )
-        except Exception as e:
-            logger.error(f"Failed to send morning verse to {user['user_id']}: {e}")
+def ask_question(update: Update, context: CallbackContext):
+    user_message = " ".join(context.args)
+    user_id = update.effective_user.id
 
-# Wrapper for Async Function
-def send_morning_verses_sync():
-    asyncio.run(send_morning_verses_async())
+    # Example NLP or AI processing logic to fetch a relevant verse (use keywords or Google's AI APIs)
+    verse = get_random_verse()  # Replace this with your custom logic or API call
+    explanation = "This verse reminds us to stay hopeful and trust in God."  # Example response
 
-# Add Job to Scheduler
-scheduler.add_job(send_morning_verses_sync, "cron", hour=8, minute=0)
+    response = f"Your input: {user_message}\n\n{verse}\n\nExplanation:\n{explanation}"
+    update.message.reply_text(response)
 
-# Main Function
+    # Log the user question and bot response
+    log_message = f"User {user_id} asked: {user_message}\nBot replied: {response}"
+    context.bot.send_message(LOG_CHANNEL_ID, log_message)
+
+# Inline keyboard example
+def inline_query(update: Update, context: CallbackContext):
+    # This handles inline queries; use for verse lookup or similar quick options
+    update.inline_query.answer([])  # Placeholder for inline options
+
+# Main function
+def main():
+    updater = Updater(TELEGRAM_TOKEN)
+    dp = updater.dispatcher
+
+    # Command handlers
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("verse", lambda update, context: update.message.reply_text(get_random_verse())))
+    dp.add_handler(CommandHandler("ask", ask_question))
+    dp.add_handler(CommandHandler("schedule", schedule_verse))
+
+    # Scheduler start
+    scheduler.start()
+
+    # Start the bot
+    updater.start_polling()
+    updater.idle()
+
 if __name__ == "__main__":
-    bot_token = os.getenv("BOT_TOKEN")  # Ensure the bot token is stored in an environment variable
-    app = ApplicationBuilder().token(bot_token).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("random", random_verse))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, plain_text_response))
-
-    port = int(os.environ.get("PORT", 8443))  # Default to 8443 for local testing
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        url_path=f"{bot_token}",  # Using the bot token as the URL path
-        webhook_url=f"https://{os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'localhost')}/{bot_token}"
-    )
+    main()
