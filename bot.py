@@ -9,10 +9,8 @@ from telegram.ext import (
     InlineQueryHandler,
 )
 import google.generativeai as genai  # Google Generative AI Library
-import schedule
-import time
+from flask import Flask, request
 import threading
-from flask import Flask
 
 # Logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -22,26 +20,30 @@ GOOGLE_AI_API_KEY = "AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k"
 BIBLE_API_ENDPOINT = "https://bible-api.com/random-verse"  # Replace with actual endpoint
 TELEGRAM_BOT_TOKEN = "7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ"
 LOG_CHANNEL_ID = "-1002351224104"
+WEBHOOK_URL = "https://godknows-ffu4.onrender.com"  # Replace with your deployment URL
 
 # Configure Google Generative AI
 genai.configure(api_key=GOOGLE_AI_API_KEY)
+
+# Flask app
+app = Flask(__name__)
 
 # Fetch a random verse from Bible API
 def get_random_verse():
     response = requests.get(BIBLE_API_ENDPOINT)
     if response.status_code == 200:
         data = response.json()
-        return data['verse'], data['text']
+        return data['reference'], data['text']
     return "John 3:16", "For God so loved the world..."
 
 # AI-based explanation using Google Generative AI
 def get_ai_explanation(verse_text):
     try:
         response = genai.generate_text(
-            model="models/text-bison-001",  # Use appropriate model
-            prompt=f"Explain this Bible verse: {verse_text}"
+            model="text-bison-001",  # Use appropriate model
+            prompt=f"Explain this Bible verse: {verse_text}",
         )
-        return response.result  # Return the explanation from AI
+        return response.candidates[0].output  # Return the explanation from AI
     except Exception as e:
         logging.error(f"Error generating AI explanation: {e}")
         return "Explanation not available."
@@ -62,31 +64,12 @@ async def handle_message(update: Update, context):
     # Log bot's response
     await context.bot.send_message(chat_id=LOG_CHANNEL_ID, text=f"Bot: {response}")
 
-# Send a scheduled verse
-async def scheduled_verse_job(context):
-    verse, verse_text = get_random_verse()
-    await context.bot.send_message(
-        chat_id="@all-users-channel",  # Replace with dynamic user list if needed
-        text=f"🌅 Good Morning!\n\n📖 *{verse}*\n_{verse_text}_",
-        parse_mode="Markdown"
-    )
-
-# Command to read the Bible
-async def read_bible(update: Update, context):
-    chapter = " ".join(context.args) or "Genesis 1"  # Default to Genesis 1
-    response = requests.get(f"{BIBLE_API_ENDPOINT}/read?chapter={chapter}")
-    if response.status_code == 200:
-        chapter_text = response.json().get("text", "Chapter not available.")
-        await update.message.reply_text(f"📖 *{chapter}*\n{chapter_text}", parse_mode="Markdown")
-    else:
-        await update.message.reply_text("Could not fetch the requested chapter.")
-
 # Inline Query Handler
 async def inline_query(update: Update, context):
     query = update.inline_query.query
     if query == "":
         return
-    verse, verse_text = get_random_verse()  # Placeholder for actual inline functionality
+    verse, verse_text = get_random_verse()
     results = [
         InlineQueryResultArticle(
             id="1",
@@ -96,40 +79,53 @@ async def inline_query(update: Update, context):
     ]
     await update.inline_query.answer(results)
 
-# Schedule daily verses
-def run_scheduler(application):
-    async def scheduler_job():
-        context = application.bot
-        job_queue = application.job_queue
-        await scheduled_verse_job(context)
+# Read Bible Command
+async def read_bible(update: Update, context):
+    chapter = " ".join(context.args) or "Genesis 1"
+    response = requests.get(f"{BIBLE_API_ENDPOINT}/read?chapter={chapter}")
+    if response.status_code == 200:
+        chapter_text = response.json().get("text", "Chapter not available.")
+        await update.message.reply_text(f"📖 *{chapter}*\n{chapter_text}", parse_mode="Markdown")
+    else:
+        await update.message.reply_text("Could not fetch the requested chapter.")
+
+# Scheduled verse job (using threading)
+def scheduled_verse_job(application):
+    async def job():
+        verse, verse_text = get_random_verse()
+        await application.bot.send_message(
+            chat_id="@all-users-channel",
+            text=f"🌅 Good Morning!\n\n📖 *{verse}*\n_{verse_text}_",
+            parse_mode="Markdown"
+        )
     
-    schedule.every().day.at("08:00").do(scheduler_job)  # Schedule for 8:00 AM
+    threading.Thread(target=job).start()
 
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-# Deploy with Flask
-app = Flask(__name__)
+# Flask webhook endpoint
+@app.route("/webhook", methods=["POST"])
+def webhook():
+    data = request.get_json(force=True)
+    application.update_queue.put(Update.de_json(data, application.bot))
+    return "OK", 200
 
 @app.route("/")
 def home():
     return "Bible Bot is running!"
 
+# Start the bot
 def start_bot():
-    # Initialize the application
+    global application
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     # Add handlers
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     application.add_handler(CommandHandler("read", read_bible))
     application.add_handler(InlineQueryHandler(inline_query))
-    
-    # Start the scheduler in a separate thread
-    threading.Thread(target=run_scheduler, args=(application,), daemon=True).start()
-    
-    # Run the bot
-    application.run_polling()
 
+    # Set webhook
+    application.bot.set_webhook(url=WEBHOOK_URL)
+
+# Run Flask app
 if __name__ == "__main__":
     start_bot()
+    app.run(host="0.0.0.0", port=5000)
