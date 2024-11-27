@@ -1,5 +1,4 @@
 python-telegram-bot
-requests
-google-auth
-google-auth-httplib2
-google-auth-oauthlib
+requests 
+schedule 
+flask
