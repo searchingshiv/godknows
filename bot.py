@@ -55,7 +55,7 @@ async def ask_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
     # Example NLP or AI processing logic to fetch a relevant verse (use keywords or Google's AI APIs)
-    verse = await get_random_verse()  # Replace this with your custom logic or API call
+    verse = await get_random_verse()  # Await added here
     explanation = "This verse reminds us to stay hopeful and trust in God."  # Example response
 
     response = f"Your input: {user_message}\n\n{verse}\n\nExplanation:\n{explanation}"
@@ -76,7 +76,7 @@ def main():
 
     # Command handlers
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("verse", lambda update, context: update.message.reply_text(get_random_verse())))
+    application.add_handler(CommandHandler("verse", lambda update, context: asyncio.run(get_random_verse())))
     application.add_handler(CommandHandler("ask", ask_question))
     application.add_handler(CommandHandler("schedule", schedule_verse))
 
