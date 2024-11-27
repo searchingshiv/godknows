@@ -16,7 +16,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 # API Keys (Replace with actual keys)
 GOOGLE_AI_API_KEY = "AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k"
 BIBLE_API_ENDPOINT = "https://bible-api.com/random-verse"  # Replace with actual endpoint
-TELEGRAM_BOT_TOKEN = "7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ"
+TELEGRAM_BOT_TOKEN = "7112230953:AAFUPLFTb3z3BMpuwjVnnc1sLkTwBu--8Gc"
 LOG_CHANNEL_ID = "-1002351224104"
 
 # Configure Google Generative AI
