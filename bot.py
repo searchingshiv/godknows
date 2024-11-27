@@ -1,4 +1,5 @@
 import logging
+import random
 import requests
 from telegram import Update, InlineQueryResultArticle, InputTextMessageContent
 from telegram.ext import (
@@ -15,26 +16,39 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 # API Keys (Replace with actual keys)
 GOOGLE_AI_API_KEY = "AIzaSyDDYYI_AoAEztLU6GyQ09xhXK4g-VBKN9k"
-BIBLE_API_ENDPOINT = "https://bible-api.com/random-verse"  # Replace with actual endpoint
+BIBLE_API_ENDPOINT = "https://bible-api.com"  # Using base URL
 TELEGRAM_BOT_TOKEN = "7112230953:AAFUPLFTb3z3BMpuwjVnnc1sLkTwBu--8Gc"
 LOG_CHANNEL_ID = "-1002351224104"
 
 # Configure Google Generative AI
 genai.configure(api_key=GOOGLE_AI_API_KEY)
 
-# Fetch a random verse from Bible API
+# List of Bible books (simplified list for demonstration, expand as needed)
+bible_books = [
+    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges",
+    "Psalms", "Proverbs", "Isaiah", "Matthew", "Mark", "Luke", "John", "Acts", "Romans"
+]
+
+# Fetch a random verse from Bible API (randomly choosing book, chapter, and verse)
 def get_random_verse():
-    response = requests.get(BIBLE_API_ENDPOINT)
+    book = random.choice(bible_books)
+    chapter = random.randint(1, 50)  # Example: Choose a random chapter between 1 and 50
+    verse = random.randint(1, 30)  # Example: Choose a random verse between 1 and 30
+
+    # Construct the API URL for the random verse
+    url = f"{BIBLE_API_ENDPOINT}/{book}+{chapter}:{verse}"
+    response = requests.get(url)
+
     if response.status_code == 200:
         data = response.json()
         return data['reference'], data['text']
-    return "John 3:16", "For God so loved the world..."
+    return "John 3:16", "For God so loved the world..."  # Default fallback
 
 # AI-based explanation using Google Generative AI
 def get_ai_explanation(verse_text):
     try:
         response = genai.generate_text(
-            model = "gemini-1.5-flash",  # Use appropriate model
+            model="gemini-1.5-flash",  # Use appropriate model
             prompt=f"Explain this Bible verse: {verse_text}",
         )
         return response.candidates[0].output  # Return the explanation from AI
@@ -73,7 +87,7 @@ async def inline_query(update: Update, context):
     ]
     await update.inline_query.answer(results)
 
-# Read Bible Command
+# Read Bible Command (for specific chapters)
 async def read_bible(update: Update, context):
     chapter = " ".join(context.args) or "Genesis 1"
     response = requests.get(f"{BIBLE_API_ENDPOINT}/read?chapter={chapter}")
