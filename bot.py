@@ -3,11 +3,18 @@ from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
-import random
+import random, os
+from dotenv import load_dotenv
 
-# Set up OpenAI API key
-openai.api_key = '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'
+# Load environment variables from .env file
+load_dotenv()
 
+# Get the environment variables using os.getenv
+# TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Now you can use these variables securely
+openai.api_key = OPENAI_API_KEY
 # Define bot token
 TELEGRAM_BOT_TOKEN = '7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ'
 
