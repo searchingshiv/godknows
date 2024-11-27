@@ -84,7 +84,7 @@ async def read_bible(update: Update, context):
         await update.message.reply_text("Could not fetch the requested chapter.")
 
 # Start the bot with polling
-async def start_bot():
+def start_bot():
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
     
     # Add handlers
@@ -93,9 +93,8 @@ async def start_bot():
     application.add_handler(InlineQueryHandler(inline_query))
 
     # Start polling for updates
-    await application.run_polling()
+    application.run_polling()
 
 if __name__ == "__main__":
     # Start the bot
-    import asyncio
-    asyncio.run(start_bot())
+    start_bot()
