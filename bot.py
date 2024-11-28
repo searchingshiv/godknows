@@ -42,14 +42,16 @@ def get_bible_explanation(verse):
             headers={"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"},
             json={"inputs": prompt},
         )
-        if response.status_code == 200:
-            generated_text = response.json().get("generated_text", "")
-            return generated_text or "This verse reminds us to reflect on God's love and teachings."
+        print(response.status_code, response.text)  # Debug response
+        if response.status_code == 200 and "generated_text" in response.json():
+            return response.json()["generated_text"]
         else:
+            print("Unexpected API response:", response.json())
             return "This verse reminds us to reflect on God's love and teachings."
     except Exception as e:
         print(f"Error generating explanation: {e}")
-        return "This verse reminds us to reflect on God's love and teachings."
+        return "Unable to fetch a detailed explanation at the moment. Reflect on this verse and let it inspire you."
+
 
 # Handle text messages
 async def handle_message(update: Update, context):
