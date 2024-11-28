@@ -46,20 +46,16 @@ def get_random_verse():
 # Fetch explanation for a verse using Google AI Studio
 async def get_bible_explanation(verse):
     """Fetch an explanation for the verse using Google AI's Gemini API."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={GOOGLE_AI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateText?key={GOOGLE_AI_API_KEY}"
     headers = {
         "Content-Type": "application/json",
     }
     payload = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "text": f"Provide a concise and insightful explanation for this Bible verse:\n\n{verse}\n\nThe explanation should be clear, meaningful, and limited to one or two sentences."
-                    }
-                ]
-            }
-        ]
+        "prompt": {
+            "text": f"Explain this Bible verse in one or two sentences:\n\n{verse}",
+        },
+        "temperature": 0.7,
+        "maxOutputTokens": 50,
     }
 
     for attempt in range(3):  # Retry logic
@@ -68,9 +64,8 @@ async def get_bible_explanation(verse):
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status == 200:
                         data = await response.json()
-                        explanation = data.get("generatedContent", "").strip()
+                        explanation = data.get("text", "").strip()
 
-                        # Validate explanation
                         if explanation and len(explanation.split()) > 5:
                             return explanation
                         logger.warning("Incomplete or invalid explanation received.")
