@@ -1,12 +1,10 @@
 import logging
 import aiohttp
 import asyncio
-from datetime import datetime
+import random
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes
 from telegram.ext.filters import TEXT
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from apscheduler.jobstores.base import JobLookupError
 
 # Configure logging
 logging.basicConfig(
@@ -15,12 +13,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Replace these with your tokens
-TELEGRAM_BOT_TOKEN = "7112230953:AAGXLw_K27M9YYhWR-uC9j4J8OHfZxQlnHk"
-HUGGINGFACE_API_TOKEN = "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"
-
-# Initialize the scheduler
-scheduler = AsyncIOScheduler()
+# Replace these with your Telegram bot token
+TELEGRAM_BOT_TOKEN = "7112230953:AAFPYR4iNsOANKRDiGcPo1PcEBbQomcLyis"
+WEB_JSON_URL = "https://raw.githubusercontent.com/searchingshiv/godknows/blob/main/web.json"  # Replace with the actual URL to the JSON file
 
 # Helper function to send error messages
 async def send_error_message(update: Update, context: ContextTypes.DEFAULT_TYPE, error_message: str):
@@ -31,116 +26,61 @@ async def send_error_message(update: Update, context: ContextTypes.DEFAULT_TYPE,
         # In case replying fails, log the error
         logger.error(f"Failed to send error message: {e}")
 
-# Fetch a random Bible verse
-async def get_random_bible_verse():
-    """Fetch a random Bible verse from the Bible API."""
-    url = "https://labs.bible.org/api/?passage=random&type=json"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36",
-        "Accept": "application/json",
-    }
-    for attempt in range(3):  # Retry logic
-        try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-                async with session.get(url, headers=headers) as response:
-                    if response.status == 200:
-                        try:
-                            data = await response.json()
-                            if data and isinstance(data, list) and "bookname" in data[0]:
-                                return f"{data[0]['bookname']} {data[0]['chapter']}:{data[0]['verse']} - {data[0]['text']}"
-                            else:
-                                logger.error(f"Unexpected API response: {data}")
-                        except Exception as parse_error:
-                            logger.error(f"Failed to parse API response. Error: {parse_error}")
-                    elif response.status == 403:
-                        logger.error("Bible API returned 403 Forbidden. Possible rate limit or block.")
-                    else:
-                        logger.error(f"Bible API error, status code: {response.status}")
-        except Exception as e:
-            logger.warning(f"Attempt {attempt + 1}: Error fetching Bible verse. {e}")
-        await asyncio.sleep(2)  # Throttle between retries
-    logger.info("Returning fallback Bible verse after retries.")
-    return "John 3:16 - For God so loved the world..."
+# Fetch the web.json file from GitHub
+async def fetch_bible_data():
+    """Fetch the Bible data (web.json) from GitHub."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(WEB_JSON_URL) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data
+                else:
+                    logger.error(f"Failed to fetch Bible data, status code: {response.status}")
+                    return None
+    except Exception as e:
+        logger.error(f"Error fetching Bible data: {e}")
+        return None
 
-# Fetch an explanation of the Bible verse from Hugging Face
-async def get_bible_explanation(verse):
-    """Fetch an explanation of the Bible verse using Hugging Face."""
-    url = "https://api-inference.huggingface.co/models/bigscience/bloom"
-    headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
-    payload = {"inputs": f"Explain the meaning of: {verse}"}
-    for attempt in range(3):  # Retry logic
-        try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-                async with session.post(url, headers=headers, json=payload) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        return data[0]["generated_text"]
-                    else:
-                        logger.error(f"Hugging Face API error, status code: {response.status}")
-        except Exception as e:
-            logger.warning(f"Attempt {attempt + 1}: Failed to fetch explanation. Error: {e}")
-    return "I couldn't fetch an explanation for the verse at this time."
+# Fetch a random Bible verse from the web.json data
+async def get_random_bible_verse():
+    """Fetch a random Bible verse from the web.json."""
+    data = await fetch_bible_data()
+    if data and 'verses' in data:
+        verse = random.choice(data['verses'])
+        book_name = verse['book_name']
+        chapter = verse['chapter']
+        verse_number = verse['verse']
+        text = verse['text']
+        return f"{book_name} {chapter}:{verse_number} - {text}"
+    else:
+        return "Sorry, I couldn't fetch a Bible verse at this time."
 
 # Start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler."""
-    chat_id = update.message.chat_id
-    job_name = f"morning_verse_{chat_id}"
-    try:
-        scheduler.remove_job(job_name)  # Remove any pre-existing job for this user
-    except JobLookupError:
-        logger.info("No existing job to remove for chat ID: %s", chat_id)
-
-    try:
-        scheduler.add_job(
-            send_morning_verse,
-            "cron",
-            hour=9,
-            minute=0,
-            args=[context, chat_id],
-            id=job_name,
-        )
-        await update.message.reply_text("You'll receive a Bible verse every morning at 9 AM!")
-    except Exception as e:
-        logger.exception("Error scheduling daily verse.")
-        await send_error_message(update, context, "Failed to schedule your daily Bible verse. Please try again later.")
-
-# Send the morning Bible verse
-async def send_morning_verse(context, chat_id):
-    """Send a morning Bible verse to the user."""
-    try:
-        verse = await get_random_bible_verse()
-        explanation = await get_bible_explanation(verse)  # Assuming you have a function for explanations
-        message = (
-            f"Good morning! Here's your Bible verse:\n\n"
-            f"**{verse}**\n\n"
-            f"Explanation:\n{explanation}"
-        )
-        await context.bot.send_message(chat_id=chat_id, text=message, parse_mode="Markdown")
-    except Exception as e:
-        logger.exception("Error sending morning verse.")
-        await context.bot.send_message(chat_id=chat_id, text="Sorry, I couldn't send a verse this morning.")
-        # Optionally, send error message to the user as a fallback
-        await send_error_message(update, context, "Sorry, there was an issue sending your daily Bible verse.")
+    await update.message.reply_text(
+        "Welcome to the Bible Bot! Use /randomverse to get a random Bible verse or send any text to get an explanation."
+    )
 
 # Random verse command handler
 async def random_verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /randomverse command."""
     try:
         verse = await get_random_bible_verse()
-        explanation = await get_bible_explanation(verse)
-        await update.message.reply_text(f"Here's a random Bible verse:\n\n{verse}\n\nExplanation:\n{explanation}")
+        await update.message.reply_text(f"Here's a random Bible verse:\n\n{verse}")
     except Exception as e:
         logger.exception("Failed to fetch random verse.")
         await send_error_message(update, context, "Sorry, I couldn't fetch a random verse right now. Please try again later.")
 
-# Handle user text messages
+# Handle user text messages (for verse explanations)
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user text messages."""
     try:
         user_message = update.message.text
-        response = await get_bible_explanation(user_message)
-        await update.message.reply_text(f"Here's an explanation:\n\n{response}")
+        # Implement logic to explain the verse if necessary (e.g., using a Hugging Face API or a predefined explanation)
+        explanation = f"Explanation for: {user_message}"  # Placeholder explanation
+        await update.message.reply_text(f"Here's an explanation:\n\n{explanation}")
     except Exception as e:
         logger.exception("Failed to handle text message.")
         await send_error_message(update, context, "Sorry, I couldn't process your message. Please try again later.")
@@ -149,7 +89,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
     await update.message.reply_text(
-        "/start - Schedule daily Bible verses at 9 AM\n"
+        "/start - Start the bot and get instructions\n"
         "/randomverse - Get a random Bible verse\n"
         "Send any text to get an explanation."
     )
@@ -164,9 +104,6 @@ def main():
     application.add_handler(CommandHandler("randomverse", random_verse))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(TEXT, handle_text))
-
-    # Start the scheduler
-    scheduler.start()
 
     # Start the bot
     application.run_polling()
