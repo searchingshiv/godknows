@@ -48,7 +48,12 @@ async def get_bible_explanation(verse):
     """Fetch an explanation for the verse using Hugging Face."""
     url = "https://api-inference.huggingface.co/models/bigscience/bloom"
     headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
-    payload = {"inputs": f"Explain the meaning of: {verse}"}
+    # Improved prompt
+    prompt = (
+        f"Provide a spiritual and historical explanation for this Bible verse:\n\n{verse}\n\n"
+        "Make it concise and insightful."
+    )
+    payload = {"inputs": prompt}
 
     for attempt in range(3):  # Retry logic
         try:
@@ -56,12 +61,17 @@ async def get_bible_explanation(verse):
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return data[0]["generated_text"]
+                        explanation = data[0]["generated_text"]
+                        # Post-process the output
+                        if explanation.strip().lower() == prompt.strip().lower():
+                            return "I'm unable to provide an explanation for this verse at the moment."
+                        return explanation
                     else:
                         logger.error(f"Hugging Face API error, status code: {response.status}")
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1}: Failed to fetch explanation. Error: {e}")
-    return "I couldn't fetch an explanation for the verse at this time."
+
+    return "I'm unable to fetch an explanation for this verse at this time."
 
 # Send a morning verse
 async def send_morning_verse(context: ContextTypes.DEFAULT_TYPE):
