@@ -1,66 +1,86 @@
 import os
+import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.jobstores.base import JobLookupError
 from datetime import time
-import random
-import requests
+import aiohttp
 from dotenv import load_dotenv
+import html
 
 # Load environment variables
 load_dotenv()
 
 # Define bot token
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")  # Use correct env var for token
+HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")
+
+# Verify environment variables
+if not TELEGRAM_BOT_TOKEN:
+    raise ValueError("TELEGRAM_BOT_TOKEN is not set in the environment variables.")
+if not HUGGINGFACE_API_TOKEN:
+    raise ValueError("HUGGINGFACE_API_TOKEN is not set in the environment variables.")
+
+# Initialize logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize the bot application
 application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 job_queue = application.job_queue  # Initialize the JobQueue
 
-# Get a random Bible verse from a free API
-def get_random_bible_verse():
-    try:
-        response = requests.get("https://labs.bible.org/api/?passage=random&type=json")
-        if response.status_code == 200:
-            data = response.json()[0]
-            verse = f"{data['bookname']} {data['chapter']}:{data['verse']} - {data['text']}"
-            return verse
-        else:
+# Asynchronously fetch a random Bible verse
+async def get_random_bible_verse():
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get("https://labs.bible.org/api/?passage=random&type=json") as response:
+                if response.status == 200:
+                    data = await response.json()
+                    verse_text = data[0]['text']
+                    verse_text_cleaned = html.unescape(verse_text)  # Decode Unicode escape sequences
+                    verse = f"{data[0]['bookname']} {data[0]['chapter']}:{data[0]['verse']} - {verse_text_cleaned}"
+                    return verse
+                else:
+                    return "John 3:16 - For God so loved the world..."
+        except Exception as e:
+            logger.error(f"Error fetching Bible verse: {e}")
             return "John 3:16 - For God so loved the world..."
-    except Exception as e:
-        print(f"Error fetching Bible verse: {e}")
-        return "John 3:16 - For God so loved the world..."
 
-# Get a Bible verse explanation dynamically using free AI
-def get_bible_explanation(verse):
+# Asynchronously fetch a Bible verse explanation
+async def get_bible_explanation(verse):
     prompt = f"Explain the meaning of the Bible verse: {verse}"
-    try:
-        response = requests.post(
-            "https://api-inference.huggingface.co/models/bigscience/bloom",
-            headers={"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"},
-            json={"inputs": prompt},
-        )
-        print(response.status_code, response.text)  # Debug response
-        if response.status_code == 200 and "generated_text" in response.json():
-            return response.json()["generated_text"]
-        else:
-            print("Unexpected API response:", response.json())
-            return "This verse reminds us to reflect on God's love and teachings."
-    except Exception as e:
-        print(f"Error generating explanation: {e}")
-        return "Unable to fetch a detailed explanation at the moment. Reflect on this verse and let it inspire you."
-
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(
+                "https://api-inference.huggingface.co/models/bigscience/bloom",
+                headers={"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"},
+                json={"inputs": prompt},
+            ) as response:
+                if response.status == 200:
+                    response_json = await response.json()
+                    if isinstance(response_json, list) and "generated_text" in response_json[0]:
+                        return response_json[0]["generated_text"]
+                    else:
+                        logger.warning(f"Unexpected API response: {response_json}")
+                        return "This verse reminds us to reflect on God's love and teachings."
+                else:
+                    logger.error(f"API Error: {response.status} - {await response.text()}")
+                    return "This verse reminds us to reflect on God's love and teachings."
+        except Exception as e:
+            logger.error(f"Error generating explanation: {e}")
+            return "Unable to fetch a detailed explanation at the moment. Reflect on this verse and let it inspire you."
 
 # Handle text messages
 async def handle_message(update: Update, context):
+    if update.message.from_user.is_bot:
+        return
+
     user_message = update.message.text
     bot = context.bot
     user_id = update.message.chat_id
 
-    verse = get_random_bible_verse()
-    explanation = get_bible_explanation(verse)
+    verse = await get_random_bible_verse()
+    explanation = await get_bible_explanation(verse)
     reply = f"Here's a verse for you: {verse}\nExplanation: {explanation}"
 
     await bot.send_message(chat_id=user_id, text=reply)
@@ -69,8 +89,8 @@ async def handle_message(update: Update, context):
 async def send_morning_verse(context):
     chat_id = context.job.data["chat_id"]  # Extract chat_id from job.data
     bot = context.bot
-    verse = get_random_bible_verse()
-    explanation = get_bible_explanation(verse)
+    verse = await get_random_bible_verse()
+    explanation = await get_bible_explanation(verse)
     await bot.send_message(chat_id=chat_id, text=f"Good morning! Here's your Bible verse: {verse}\nExplanation: {explanation}")
 
 # Start command handler
@@ -81,15 +101,18 @@ async def start(update: Update, context):
             send_morning_verse,
             time=time(7, 0, 0),
             data={"chat_id": user_id},  # Pass chat_id using job.data
+            name=f"morning_verse_{user_id}",  # Unique job name
+            replace_existing=True
         )
         await update.message.reply_text("Welcome! I will send you a Bible verse every morning.")
-    except JobLookupError:
-        await update.message.reply_text("You are already subscribed for daily Bible verses.")
+    except Exception as e:
+        logger.error(f"Error scheduling daily verse: {e}")
+        await update.message.reply_text("An error occurred while scheduling your daily Bible verses. Please try again.")
 
 # Random verse command handler
 async def random_verse(update: Update, context):
-    verse = get_random_bible_verse()
-    explanation = get_bible_explanation(verse)
+    verse = await get_random_bible_verse()
+    explanation = await get_bible_explanation(verse)
     await update.message.reply_text(f"Here's a random Bible verse: {verse}\nExplanation: {explanation}")
 
 # Add handlers to the application
