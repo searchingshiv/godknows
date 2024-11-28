@@ -2,3 +2,4 @@ python-telegram-bot[job-queue]
 openai==0.28.0
 apscheduler
 python-dotenv
+flask
