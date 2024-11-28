@@ -1,7 +1,7 @@
 import logging
-import aiohttp
-import asyncio
 import random
+import json
+import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes
 from telegram.ext.filters import TEXT
@@ -14,8 +14,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Replace these with your Telegram bot token
-TELEGRAM_BOT_TOKEN = "7112230953:AAFPYR4iNsOANKRDiGcPo1PcEBbQomcLyis"
-WEB_JSON_URL = "https://raw.githubusercontent.com/searchingshiv/godknows/blob/main/web.json"  # Replace with the actual URL to the JSON file
+TELEGRAM_BOT_TOKEN = "YOUR_TELEGRAM_BOT_TOKEN"
+WEB_JSON_FILE_PATH = "web.json"  # Path to the web.json file in your repo
 
 # Helper function to send error messages
 async def send_error_message(update: Update, context: ContextTypes.DEFAULT_TYPE, error_message: str):
@@ -26,20 +26,19 @@ async def send_error_message(update: Update, context: ContextTypes.DEFAULT_TYPE,
         # In case replying fails, log the error
         logger.error(f"Failed to send error message: {e}")
 
-# Fetch the web.json file from GitHub
+# Fetch the web.json file from local file system
 async def fetch_bible_data():
-    """Fetch the Bible data (web.json) from GitHub."""
+    """Fetch the Bible data (web.json) from the local file system."""
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(WEB_JSON_URL) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    return data
-                else:
-                    logger.error(f"Failed to fetch Bible data, status code: {response.status}")
-                    return None
+        if os.path.exists(WEB_JSON_FILE_PATH):
+            with open(WEB_JSON_FILE_PATH, 'r') as f:
+                data = json.load(f)
+                return data
+        else:
+            logger.error(f"{WEB_JSON_FILE_PATH} not found.")
+            return None
     except Exception as e:
-        logger.error(f"Error fetching Bible data: {e}")
+        logger.error(f"Error reading the Bible data from file: {e}")
         return None
 
 # Fetch a random Bible verse from the web.json data
