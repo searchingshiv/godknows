@@ -22,6 +22,16 @@ HUGGINGFACE_API_TOKEN = "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"
 # Initialize the scheduler
 scheduler = AsyncIOScheduler()
 
+# Helper function to send error messages
+async def send_error_message(update: Update, context: ContextTypes.DEFAULT_TYPE, error_message: str):
+    """Send an error message to the user."""
+    try:
+        await update.message.reply_text(f"Sorry, an error occurred:\n\n{error_message}")
+    except Exception as e:
+        # In case replying fails, log the error
+        logger.error(f"Failed to send error message: {e}")
+
+# Fetch a random Bible verse
 async def get_random_bible_verse():
     """Fetch a random Bible verse from the Bible API."""
     url = "https://labs.bible.org/api/?passage=random&type=json"
@@ -52,6 +62,7 @@ async def get_random_bible_verse():
     logger.info("Returning fallback Bible verse after retries.")
     return "John 3:16 - For God so loved the world..."
 
+# Fetch an explanation of the Bible verse from Hugging Face
 async def get_bible_explanation(verse):
     """Fetch an explanation of the Bible verse using Hugging Face."""
     url = "https://api-inference.huggingface.co/models/bigscience/bloom"
@@ -70,6 +81,7 @@ async def get_bible_explanation(verse):
             logger.warning(f"Attempt {attempt + 1}: Failed to fetch explanation. Error: {e}")
     return "I couldn't fetch an explanation for the verse at this time."
 
+# Start command handler
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler."""
     chat_id = update.message.chat_id
@@ -79,21 +91,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except JobLookupError:
         logger.info("No existing job to remove for chat ID: %s", chat_id)
 
-    scheduler.add_job(
-        send_morning_verse,
-        "cron",
-        hour=9,
-        minute=0,
-        args=[context, chat_id],
-        id=job_name,
-    )
-    await update.message.reply_text("You'll receive a Bible verse every morning at 9 AM!")
+    try:
+        scheduler.add_job(
+            send_morning_verse,
+            "cron",
+            hour=9,
+            minute=0,
+            args=[context, chat_id],
+            id=job_name,
+        )
+        await update.message.reply_text("You'll receive a Bible verse every morning at 9 AM!")
+    except Exception as e:
+        logger.exception("Error scheduling daily verse.")
+        await send_error_message(update, context, "Failed to schedule your daily Bible verse. Please try again later.")
 
+# Send the morning Bible verse
 async def send_morning_verse(context, chat_id):
     """Send a morning Bible verse to the user."""
     try:
         verse = await get_random_bible_verse()
-        explanation = await get_bible_explanation(verse)
+        explanation = await get_bible_explanation(verse)  # Assuming you have a function for explanations
         message = (
             f"Good morning! Here's your Bible verse:\n\n"
             f"**{verse}**\n\n"
@@ -103,7 +120,10 @@ async def send_morning_verse(context, chat_id):
     except Exception as e:
         logger.exception("Error sending morning verse.")
         await context.bot.send_message(chat_id=chat_id, text="Sorry, I couldn't send a verse this morning.")
+        # Optionally, send error message to the user as a fallback
+        await send_error_message(update, context, "Sorry, there was an issue sending your daily Bible verse.")
 
+# Random verse command handler
 async def random_verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /randomverse command."""
     try:
@@ -112,8 +132,9 @@ async def random_verse(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Here's a random Bible verse:\n\n{verse}\n\nExplanation:\n{explanation}")
     except Exception as e:
         logger.exception("Failed to fetch random verse.")
-        await update.message.reply_text("Sorry, I couldn't fetch a random verse right now. Please try again later.")
+        await send_error_message(update, context, "Sorry, I couldn't fetch a random verse right now. Please try again later.")
 
+# Handle user text messages
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle user text messages."""
     try:
@@ -122,8 +143,9 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Here's an explanation:\n\n{response}")
     except Exception as e:
         logger.exception("Failed to handle text message.")
-        await update.message.reply_text("Sorry, I couldn't process your message. Please try again later.")
+        await send_error_message(update, context, "Sorry, I couldn't process your message. Please try again later.")
 
+# Help command handler
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /help command."""
     await update.message.reply_text(
@@ -132,6 +154,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Send any text to get an explanation."
     )
 
+# Main function to run the bot
 def main():
     """Run the bot."""
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
