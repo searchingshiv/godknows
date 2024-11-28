@@ -29,13 +29,20 @@ async def get_random_bible_verse():
             async with aiohttp.ClientSession() as session:
                 async with session.get(url) as response:
                     if response.status == 200:
-                        data = await response.json()
-                        return f"{data[0]['bookname']} {data[0]['chapter']}:{data[0]['verse']} - {data[0]['text']}"
+                        try:
+                            data = await response.json()
+                            if data and isinstance(data, list) and "bookname" in data[0]:
+                                return f"{data[0]['bookname']} {data[0]['chapter']}:{data[0]['verse']} - {data[0]['text']}"
+                            else:
+                                logger.error(f"Unexpected API response: {data}")
+                        except Exception as parse_error:
+                            logger.error(f"Failed to parse API response. Error: {parse_error}")
                     else:
                         logger.error(f"Bible API error, status code: {response.status}")
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1}: Failed to fetch Bible verse. Error: {e}")
     return "John 3:16 - For God so loved the world..."
+
 
 
 async def get_bible_explanation(verse):
