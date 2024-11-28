@@ -1,17 +1,14 @@
 import os
-import openai
 from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import time
 import random
 from dotenv import load_dotenv
+import requests  # For API requests
 
 # Load environment variables
 load_dotenv()
-
-# Set up OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Define bot token
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -29,22 +26,39 @@ def log_to_channel(message, reply):
     log_message = f"User: {message}\nBot: {reply}"
     bot.send_message(chat_id=LOG_CHANNEL, text=log_message)
 
-# Send a random Bible verse
+# Get a random Bible verse from a free API
 def get_random_bible_verse():
-    bible_verses = [
-        "John 3:16 - For God so loved the world...",
-        "Philippians 4:13 - I can do all things through Christ who strengthens me.",
-    ]
-    return random.choice(bible_verses)
+    """Fetches a random Bible verse dynamically from a free Bible API."""
+    try:
+        response = requests.get("https://labs.bible.org/api/?passage=random&type=json")
+        if response.status_code == 200:
+            data = response.json()[0]
+            verse = f"{data['bookname']} {data['chapter']}:{data['verse']} - {data['text']}"
+            return verse
+        else:
+            return "John 3:16 - For God so loved the world..."
+    except Exception as e:
+        print(f"Error fetching Bible verse: {e}")
+        return "John 3:16 - For God so loved the world..."
 
-# Get Bible verse explanation using OpenAI
+# Get a Bible verse explanation dynamically using a free AI model
 def get_bible_explanation(verse):
+    """Generates an explanation for the given Bible verse using Hugging Face or similar."""
     prompt = f"Explain the meaning of the Bible verse: {verse}"
-    response = openai.ChatCompletion.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response["choices"][0]["message"]["content"].strip()
+    try:
+        # Replace with your free API endpoint or Hugging Face model
+        response = requests.post(
+            "https://api-inference.huggingface.co/models/bigscience/bloom",
+            headers={"Authorization": f"Bearer {os.getenv('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')}"},
+            json={"inputs": prompt},
+        )
+        if response.status_code == 200:
+            return response.json()["generated_text"]
+        else:
+            return "This verse reminds us to reflect on God's love and teachings."
+    except Exception as e:
+        print(f"Error generating explanation: {e}")
+        return "This verse reminds us to reflect on God's love and teachings."
 
 # Handle text messages
 async def handle_message(update: Update, context):
@@ -52,14 +66,9 @@ async def handle_message(update: Update, context):
     bot = context.bot
     user_id = update.message.chat_id
 
-    if user_message.lower() in ["happy", "sad", "confused"]:
-        verse = get_random_bible_verse()
-        explanation = get_bible_explanation(verse)
-        reply = f"Feeling {user_message}? Here's a verse for you: {verse}\nExplanation: {explanation}"
-    else:
-        verse = get_random_bible_verse()
-        explanation = get_bible_explanation(verse)
-        reply = f"Here's a verse for you: {verse}\nExplanation: {explanation}"
+    verse = get_random_bible_verse()
+    explanation = get_bible_explanation(verse)
+    reply = f"Here's a verse for you: {verse}\nExplanation: {explanation}"
 
     await bot.send_message(chat_id=user_id, text=reply)
     log_to_channel(user_message, reply)
