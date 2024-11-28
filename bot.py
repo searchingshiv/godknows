@@ -1,43 +1,39 @@
+import os
 import openai
-from telegram import Bot, Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
-import random, os
-from dotenv import load_dotenv
+import random
 
-# Load environment variables from .env file
+# Load environment variables
+from dotenv import load_dotenv
 load_dotenv()
 
-# Get the environment variables using os.getenv
-# TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Set up OpenAI API key
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Now you can use these variables securely
-openai.api_key = OPENAI_API_KEY
 # Define bot token
-TELEGRAM_BOT_TOKEN = '7112230953:AAF4TdvJqCFV7bVXLsU9ITXVeNUik2ZJnSQ'
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
-# Initialize the bot
-updater = Updater(token=TELEGRAM_BOT_TOKEN, use_context=True)
-dp = updater.dispatcher
+# Initialize the bot application
+application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
 # Log user messages and bot responses to a channel
-LOG_CHANNEL = '@yourlogchannel'
+LOG_CHANNEL = '-1002351224104'
 
 def log_to_channel(message, reply):
     """Logs the user message and bot reply to the channel"""
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    bot = application.bot
     log_message = f"User: {message}\nBot: {reply}"
     bot.send_message(chat_id=LOG_CHANNEL, text=log_message)
 
 # Send a random Bible verse
 def get_random_bible_verse():
     bible_verses = [
-        # List of Bible verses
         "John 3:16 - For God so loved the world...",
         "Philippians 4:13 - I can do all things through Christ who strengthens me.",
-        # Add more verses
+        # Add more verses here
     ]
     return random.choice(bible_verses)
 
@@ -50,7 +46,7 @@ def get_bible_explanation(verse):
     return response.choices[0].text.strip()
 
 # Handle text messages
-def handle_message(update, context):
+async def handle_message(update: Update, context):
     user_message = update.message.text
     bot = context.bot
     user_id = update.message.chat_id
@@ -64,32 +60,34 @@ def handle_message(update, context):
         explanation = get_bible_explanation(verse)
         reply = f"Here's a verse for you: {verse}\nExplanation: {explanation}"
 
-    bot.send_message(chat_id=user_id, text=reply)
+    await bot.send_message(chat_id=user_id, text=reply)
     log_to_channel(user_message, reply)
 
 # Send a scheduled Bible verse every morning
-def send_morning_verse(context):
+async def send_morning_verse(context):
     bot = context.bot
     chat_id = context.job.context
     verse = get_random_bible_verse()
     explanation = get_bible_explanation(verse)
-    bot.send_message(chat_id=chat_id, text=f"Good morning! Here's your Bible verse: {verse}\nExplanation: {explanation}")
+    await bot.send_message(chat_id=chat_id, text=f"Good morning! Here's your Bible verse: {verse}\nExplanation: {explanation}")
 
-def start(update, context):
+# Start command handler
+async def start(update: Update, context):
     user_id = update.message.chat_id
     context.job_queue.run_daily(send_morning_verse, time=datetime.time(7, 0, 0), context=user_id)
-    update.message.reply_text("Welcome! I will send you a Bible verse every morning.")
+    await update.message.reply_text("Welcome! I will send you a Bible verse every morning.")
 
-def random_verse(update, context):
+# Random verse command handler
+async def random_verse(update: Update, context):
     verse = get_random_bible_verse()
     explanation = get_bible_explanation(verse)
-    update.message.reply_text(f"Here's a random Bible verse: {verse}\nExplanation: {explanation}")
+    await update.message.reply_text(f"Here's a random Bible verse: {verse}\nExplanation: {explanation}")
 
-# Add handlers
-dp.add_handler(CommandHandler("start", start))
-dp.add_handler(CommandHandler("randomverse", random_verse))
-dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_message))
+# Add handlers to the application
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("randomverse", random_verse))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
 # Start the bot
-updater.start_polling()
-updater.idle()
+if __name__ == "__main__":
+    application.run_polling()
