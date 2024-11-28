@@ -2,16 +2,18 @@ import os
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.jobstores.base import JobLookupError
 from datetime import time
 import random
-from dotenv import load_dotenv
 import requests
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
 # Define bot token
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+HUGGINGFACE_API_TOKEN = os.getenv("HUGGINGFACE_API_TOKEN")  # Use correct env var for token
 
 # Initialize the bot application
 application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
@@ -37,11 +39,12 @@ def get_bible_explanation(verse):
     try:
         response = requests.post(
             "https://api-inference.huggingface.co/models/bigscience/bloom",
-            headers={"Authorization": f"Bearer {os.getenv('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')}"},
+            headers={"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"},
             json={"inputs": prompt},
         )
         if response.status_code == 200:
-            return response.json()["generated_text"]
+            generated_text = response.json().get("generated_text", "")
+            return generated_text or "This verse reminds us to reflect on God's love and teachings."
         else:
             return "This verse reminds us to reflect on God's love and teachings."
     except Exception as e:
@@ -71,12 +74,15 @@ async def send_morning_verse(context):
 # Start command handler
 async def start(update: Update, context):
     user_id = update.message.chat_id
-    job_queue.run_daily(
-        send_morning_verse,
-        time=time(7, 0, 0),
-        data={"chat_id": user_id},  # Pass chat_id using job.data
-    )
-    await update.message.reply_text("Welcome! I will send you a Bible verse every morning.")
+    try:
+        job_queue.run_daily(
+            send_morning_verse,
+            time=time(7, 0, 0),
+            data={"chat_id": user_id},  # Pass chat_id using job.data
+        )
+        await update.message.reply_text("Welcome! I will send you a Bible verse every morning.")
+    except JobLookupError:
+        await update.message.reply_text("You are already subscribed for daily Bible verses.")
 
 # Random verse command handler
 async def random_verse(update: Update, context):
