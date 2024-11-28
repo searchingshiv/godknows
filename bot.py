@@ -3,11 +3,11 @@ import openai
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import datetime
+from datetime import time
 import random
+from dotenv import load_dotenv
 
 # Load environment variables
-from dotenv import load_dotenv
 load_dotenv()
 
 # Set up OpenAI API key
@@ -20,7 +20,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
 # Log user messages and bot responses to a channel
-LOG_CHANNEL = '-1002351224104'
+LOG_CHANNEL = '-1002351224104'  # Replace with your Telegram channel ID
 
 def log_to_channel(message, reply):
     """Logs the user message and bot reply to the channel"""
@@ -74,7 +74,7 @@ async def send_morning_verse(context):
 # Start command handler
 async def start(update: Update, context):
     user_id = update.message.chat_id
-    context.job_queue.run_daily(send_morning_verse, time=datetime.time(7, 0, 0), context=user_id)
+    context.job_queue.run_daily(send_morning_verse, time=time(7, 0, 0), context=user_id)
     await update.message.reply_text("Welcome! I will send you a Bible verse every morning.")
 
 # Random verse command handler
@@ -90,4 +90,5 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_m
 
 # Start the bot
 if __name__ == "__main__":
+    # Use application.run_polling() for Render Background Worker
     application.run_polling()
