@@ -20,7 +20,7 @@ TELEGRAM_BOT_TOKEN = "7112230953:AAFPYR4iNsOANKRDiGcPo1PcEBbQomcLyis"
 HUGGINGFACE_API_TOKEN = "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"
 WEB_JSON_FILE_PATH = "web.json"  # Path to web.json in your repo
 
-# Helper function to read the Bible data
+# Helper function to load Bible data
 def load_bible_data():
     """Load Bible data from web.json."""
     try:
@@ -49,8 +49,9 @@ async def get_bible_explanation(verse):
     url = "https://api-inference.huggingface.co/models/bigscience/bloom"
     headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
     prompt = (
-        f"Provide a concise and insightful spiritual and historical explanation for this Bible verse:\n\n{verse}\n\n"
-        "The explanation should be in one or two sentences."
+        f"Provide a concise and insightful explanation for the following Bible verse:\n\n"
+        f"{verse}\n\n"
+        "Make it meaningful in one or two sentences."
     )
     payload = {"inputs": prompt}
 
@@ -60,25 +61,19 @@ async def get_bible_explanation(verse):
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status == 200:
                         data = await response.json()
-                        explanation = data[0]["generated_text"]
+                        explanation = data[0].get("generated_text", "").strip()
 
-                        # Post-process and validate output
-                        if len(explanation.split()) < 5 or "Asa was" in explanation:  # Detect short or generic outputs
-                            logger.warning("Incomplete or irrelevant explanation generated.")
-                            return "This verse reflects the end of Asa's reign, symbolizing the mortality of even great leaders and the importance of their legacy."
-                        return explanation.strip()
-
-                    else:
-                        logger.error(f"Hugging Face API error, status code: {response.status}")
+                        # Check for valid output
+                        if explanation and len(explanation.split()) > 5:
+                            return explanation
+                        logger.warning("Incomplete explanation received.")
         except Exception as e:
-            logger.warning(f"Attempt {attempt + 1}: Failed to fetch explanation. Error: {e}")
+            logger.warning(f"Attempt {attempt + 1}: Error fetching explanation: {e}")
 
     # Fallback explanation
     return (
-        "Asa's death marked the conclusion of a reign filled with reforms, "
-        "but also highlighted the human limitations of even a righteous leader in the Biblical narrative."
+        "This verse offers timeless wisdom, encouraging reflection on spiritual truths and their application to life."
     )
-
 
 # Send a morning verse
 async def send_morning_verse(context: ContextTypes.DEFAULT_TYPE):
