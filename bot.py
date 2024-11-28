@@ -1,12 +1,12 @@
 import os
 import logging
+import threading
+from datetime import time
+from flask import Flask
+import aiohttp
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
-from apscheduler.schedulers.background import BackgroundScheduler
-from datetime import time
-import aiohttp
 from dotenv import load_dotenv
-import html
 
 # Load environment variables
 load_dotenv()
@@ -36,9 +36,7 @@ async def get_random_bible_verse():
             async with session.get("https://labs.bible.org/api/?passage=random&type=json") as response:
                 if response.status == 200:
                     data = await response.json()
-                    verse_text = data[0]['text']
-                    verse_text_cleaned = html.unescape(verse_text)  # Decode Unicode escape sequences
-                    verse = f"{data[0]['bookname']} {data[0]['chapter']}:{data[0]['verse']} - {verse_text_cleaned}"
+                    verse = f"{data[0]['bookname']} {data[0]['chapter']}:{data[0]['verse']} - {data[0]['text']}"
                     return verse
                 else:
                     return "John 3:16 - For God so loved the world..."
@@ -101,8 +99,7 @@ async def start(update: Update, context):
             send_morning_verse,
             time=time(7, 0, 0),
             data={"chat_id": user_id},  # Pass chat_id using job.data
-            name=f"morning_verse_{user_id}",  # Unique job name
-            replace_existing=True
+            name=f"morning_verse_{user_id}"  # Unique job name
         )
         await update.message.reply_text("Welcome! I will send you a Bible verse every morning.")
     except Exception as e:
@@ -115,11 +112,28 @@ async def random_verse(update: Update, context):
     explanation = await get_bible_explanation(verse)
     await update.message.reply_text(f"Here's a random Bible verse: {verse}\nExplanation: {explanation}")
 
+# Add error handler
+async def error_handler(update: Update, context):
+    logger.error(f"Update {update} caused error {context.error}")
+
+application.add_error_handler(error_handler)
+
 # Add handlers to the application
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("randomverse", random_verse))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
+# Dummy web server to satisfy Render's port requirement
+app = Flask(__name__)
+
+@app.route("/")
+def home():
+    return "Telegram Bot is running."
+
+def run_server():
+    app.run(host="0.0.0.0", port=5000)
+
 # Start the bot
 if __name__ == "__main__":
+    threading.Thread(target=run_server, daemon=True).start()
     application.run_polling()
