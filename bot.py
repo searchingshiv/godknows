@@ -1,5 +1,6 @@
 import logging
 import aiohttp
+import datetime
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes
 from telegram.ext.filters import TEXT
@@ -17,6 +18,8 @@ logger = logging.getLogger(__name__)
 TELEGRAM_BOT_TOKEN = "7112230953:AAGXLw_K27M9YYhWR-uC9j4J8OHfZxQlnHk"
 HUGGINGFACE_API_TOKEN = "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"
 
+# Initialize the scheduler
+scheduler = AsyncIOScheduler()
 
 async def get_random_bible_verse():
     """Fetch a random Bible verse from the Bible API."""
@@ -58,11 +61,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler."""
     try:
         chat_id = update.message.chat_id
-        context.job_queue.run_daily(
-            callback=send_morning_verse,
-            time=datetime.time(hour=9, minute=0),  # Set your desired time here
-            context=chat_id,
-            name=f"morning_verse_{chat_id}",
+        job_name = f"morning_verse_{chat_id}"
+        # Remove existing job if it exists
+        try:
+            scheduler.remove_job(job_name)
+        except JobLookupError:
+            pass
+
+        scheduler.add_job(
+            send_morning_verse,
+            "cron",
+            hour=9,
+            minute=0,
+            args=[context, chat_id],
+            id=job_name,
         )
         await update.message.reply_text("You will receive a Bible verse every morning at 9 AM.")
     except Exception as e:
@@ -70,9 +82,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Failed to schedule daily Bible verses. Please try again.")
 
 
-async def send_morning_verse(context: ContextTypes.DEFAULT_TYPE):
+async def send_morning_verse(context, chat_id):
     """Send a morning Bible verse."""
-    chat_id = context.job.context
     try:
         verse = await get_random_bible_verse()
         explanation = await get_bible_explanation(verse)
@@ -112,6 +123,9 @@ def main():
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("randomverse", random_verse))
     application.add_handler(MessageHandler(TEXT, handle_text))
+
+    # Start the scheduler
+    scheduler.start()
 
     # Start the bot
     application.run_polling()
