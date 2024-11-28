@@ -16,8 +16,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Replace these with your tokens
-TELEGRAM_BOT_TOKEN = "7112230953:AAFPYR4iNsOANKRDiGcPo1PcEBbQomcLyis"
-HUGGINGFACE_API_TOKEN = "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"
+TELEGRAM_BOT_TOKEN = "7112230953:AAFCXqfbPPKDjyhqMR2kB79-va6r41hL5k4"
+GOOGLE_AI_API_KEY = "AIzaSyCdocRvo6hW-BwramnILdHzej6LHUDMoAc"
 WEB_JSON_FILE_PATH = "web.json"  # Path to web.json in your repo
 
 # Helper function to load Bible data
@@ -43,17 +43,19 @@ def get_random_verse():
         return f"{verse['book_name']} {verse['chapter']}:{verse['verse']} - {verse['text']}"
     return "John 3:16 - For God so loved the world..."
 
-# Fetch explanation for a verse using Hugging Face
+# Fetch explanation for a verse using Google AI Studio
 async def get_bible_explanation(verse):
-    """Fetch an explanation for the verse using Hugging Face."""
-    url = "https://api-inference.huggingface.co/models/bigscience/bloom"
-    headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
-    prompt = (
-        f"Provide a concise and insightful explanation for the following Bible verse:\n\n"
-        f"{verse}\n\n"
-        "Make it meaningful in one or two sentences."
-    )
-    payload = {"inputs": prompt}
+    """Fetch an explanation for the verse using Google AI Studio API."""
+    url = "https://aistudio.google.com/apikey"
+    headers = {"Authorization": f"Bearer {GOOGLE_AI_API_KEY}"}
+    payload = {
+        "prompt": (
+            f"Provide a concise and insightful explanation for the following Bible verse:\n\n"
+            f"{verse}\n\n"
+            "The explanation should be clear, meaningful, and limited to one or two sentences."
+        ),
+        "max_tokens": 100,
+    }
 
     for attempt in range(3):  # Retry logic
         try:
@@ -61,12 +63,12 @@ async def get_bible_explanation(verse):
                 async with session.post(url, headers=headers, json=payload) as response:
                     if response.status == 200:
                         data = await response.json()
-                        explanation = data[0].get("generated_text", "").strip()
+                        explanation = data.get("choices", [{}])[0].get("text", "").strip()
 
-                        # Check for valid output
+                        # Validate explanation
                         if explanation and len(explanation.split()) > 5:
                             return explanation
-                        logger.warning("Incomplete explanation received.")
+                        logger.warning("Incomplete or invalid explanation received.")
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1}: Error fetching explanation: {e}")
 
