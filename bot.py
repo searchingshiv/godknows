@@ -41,7 +41,7 @@ def get_random_bible_verse():
 def get_bible_explanation(verse):
     prompt = f"Explain the meaning of the Bible verse: {verse}"
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}]
     )
     return response["choices"][0]["message"]["content"].strip()
