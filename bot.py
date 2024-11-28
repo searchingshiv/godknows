@@ -24,10 +24,13 @@ scheduler = AsyncIOScheduler()
 async def get_random_bible_verse():
     """Fetch a random Bible verse from the Bible API."""
     url = "https://labs.bible.org/api/?passage=random&type=json"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
+    }
     for attempt in range(3):  # Retry logic
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url) as response:
+                async with session.get(url, headers=headers) as response:
                     if response.status == 200:
                         try:
                             data = await response.json()
@@ -37,12 +40,14 @@ async def get_random_bible_verse():
                                 logger.error(f"Unexpected API response: {data}")
                         except Exception as parse_error:
                             logger.error(f"Failed to parse API response. Error: {parse_error}")
+                    elif response.status == 403:
+                        logger.error("Bible API error, status code: 403. Possible IP block or missing headers.")
                     else:
                         logger.error(f"Bible API error, status code: {response.status}")
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1}: Failed to fetch Bible verse. Error: {e}")
+        await asyncio.sleep(2)  # Throttle retries
     return "John 3:16 - For God so loved the world..."
-
 
 
 async def get_bible_explanation(verse):
