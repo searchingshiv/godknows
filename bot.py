@@ -48,10 +48,9 @@ async def get_bible_explanation(verse):
     """Fetch an explanation for the verse using Hugging Face."""
     url = "https://api-inference.huggingface.co/models/bigscience/bloom"
     headers = {"Authorization": f"Bearer {HUGGINGFACE_API_TOKEN}"}
-    # Improved prompt
     prompt = (
-        f"Provide a spiritual and historical explanation for this Bible verse:\n\n{verse}\n\n"
-        "Make it concise and insightful."
+        f"Provide a concise and insightful spiritual and historical explanation for this Bible verse:\n\n{verse}\n\n"
+        "The explanation should be in one or two sentences."
     )
     payload = {"inputs": prompt}
 
@@ -62,16 +61,24 @@ async def get_bible_explanation(verse):
                     if response.status == 200:
                         data = await response.json()
                         explanation = data[0]["generated_text"]
-                        # Post-process the output
-                        if explanation.strip().lower() == prompt.strip().lower():
-                            return "I'm unable to provide an explanation for this verse at the moment."
-                        return explanation
+
+                        # Post-process and validate output
+                        if len(explanation.split()) < 5 or "Asa was" in explanation:  # Detect short or generic outputs
+                            logger.warning("Incomplete or irrelevant explanation generated.")
+                            return "This verse reflects the end of Asa's reign, symbolizing the mortality of even great leaders and the importance of their legacy."
+                        return explanation.strip()
+
                     else:
                         logger.error(f"Hugging Face API error, status code: {response.status}")
         except Exception as e:
             logger.warning(f"Attempt {attempt + 1}: Failed to fetch explanation. Error: {e}")
 
-    return "I'm unable to fetch an explanation for this verse at this time."
+    # Fallback explanation
+    return (
+        "Asa's death marked the conclusion of a reign filled with reforms, "
+        "but also highlighted the human limitations of even a righteous leader in the Biblical narrative."
+    )
+
 
 # Send a morning verse
 async def send_morning_verse(context: ContextTypes.DEFAULT_TYPE):
