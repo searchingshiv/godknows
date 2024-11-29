@@ -91,6 +91,16 @@ async def reply_with_image(client, chat_id, text):
         logger.warning("No image links found in the environment variable.")
         await client.send_message(chat_id, text)
 
+# Helper function to log user messages and bot responses
+async def log_to_channel(client, user_message, bot_response):
+    """Log user messages and bot responses to the specified log channel."""
+    log_channel_id = os.getenv("LOG_CHANNEL_ID")  # Get the log channel ID from environment variable
+    if log_channel_id:
+        log_text = f"User Message: {user_message}\nBot Response: {bot_response}"
+        await client.send_message(log_channel_id, log_text)
+    else:
+        logger.warning("LOG_CHANNEL_ID not set in environment variables.")
+
 # Command: /start
 @app.on_message(filters.command("start"))
 async def start(client, message):
@@ -118,6 +128,9 @@ async def random_verse(client, message):
         explanation = await get_bible_explanation(verse)
         text = f"📖 **Here’s a random Bible verse:**\n\n_{verse}_\n\n💡 **Explanation:**\n{explanation}"
         await reply_with_image(client, message.chat.id, text)
+        
+        # Log the user message and bot response
+        await log_to_channel(client, "Random verse requested", text)
     except Exception as e:
         logger.exception("Failed to fetch random verse")
         await message.reply_text("Sorry, I couldn’t fetch a verse right now. Please try again later.")
@@ -128,7 +141,7 @@ async def handle_text(client, message):
     """Handle user text messages and suggest an uplifting verse."""
     try:
         user_message = message.text
-        prompt = f"Suggest an uplifting Bible verse in 3-4 lines related to this: {user_message} and explain it in compassionate and uplifting way."
+        prompt = f"Suggest an uplifting Bible verse in 3-4 lines related to this: {user_message}..... and explain it in a compassionate and uplifting way."
         model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
         
@@ -148,6 +161,9 @@ async def handle_text(client, message):
             # Build the message with the verse and explanation
             text = f"✨ **Listen Dear:**\n\n{verse}\n\n😌😌"
             await reply_with_image(client, message.chat.id, text)
+            
+            # Log the user message and bot response
+            await log_to_channel(client, user_message, text)
         else:
             await message.reply_text("Sorry, I couldn’t find a verse for you. Please try again later.")
     except Exception as e:
