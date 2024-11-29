@@ -6,6 +6,8 @@ from pyrogram import Client, filters
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 import google.generativeai as genai
+from flask import Flask
+from threading import Thread
 
 # Configure logging
 logging.basicConfig(
@@ -17,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Replace these with environment variables
 API_ID = int(os.getenv("API_ID", "25833520"))  # Replace with your Telegram API ID
 API_HASH = os.getenv("API_HASH", "7d012a6cbfabc2d0436d7a09d8362af7")  # Replace with your Telegram API hash
-BOT_TOKEN = os.getenv("BOT_TOKEN", "7112230953:AAEwl9pUwc8BnC-813gHdG2zkmK6cHIZ4C8")  # Replace with your bot token
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7112230953:AAHOEjToGy4jipliOK2NBiu6ai8gNoWv5tg")  # Replace with your bot token
 GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY", "AIzaSyCagXIk1RudmoinloSRyLasw21Vo2-pzhQ")
 WEB_JSON_FILE_PATH = "web.json"  # Path to web.json in your repo
 genai.configure(api_key=GOOGLE_AI_API_KEY)
@@ -27,6 +29,9 @@ app = Client("bible_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
 # Scheduler for daily tasks
 scheduler = AsyncIOScheduler()
+
+# Initialize Flask app for deployment
+flask_app = Flask(__name__)
 
 # Helper function to load Bible data
 def load_bible_data():
@@ -166,8 +171,22 @@ async def help_command(client, message):
         "Send any text to get an uplifting verse and explanation!"
     )
 
-# Ensure the bot listens on the correct port for Render deployment
+# Flask route for Render deployment
+@flask_app.route("/")
+def home():
+    return "Bible Bot is running!"
+
+# Run Flask in a separate thread to avoid blocking Pyrogram's event loop
+def run_flask():
+    flask_app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+
+# Run the bot and Flask in separate threads
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))  # Default to 5000 if no port is set
     scheduler.start()
-    app.run(port=port)
+
+    # Run Flask in a separate thread
+    flask_thread = Thread(target=run_flask)
+    flask_thread.start()
+
+    # Run the bot (Pyrogram)
+    app.run()
