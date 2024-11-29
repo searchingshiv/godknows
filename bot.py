@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # Replace these with your tokens and API keys
 API_ID = 25833520  # Replace with your Telegram API ID
 API_HASH = "7d012a6cbfabc2d0436d7a09d8362af7"  # Replace with your Telegram API hash
-BOT_TOKEN = "7112230953:AAHPPXd8-2_H1jJ1S1hYP2CuR7HOPx9LyuM"  # Replace with your bot token
+BOT_TOKEN = "7112230953:AAGIM-18_rQWtmaQ_7AJqifa028wHFBnB_M"  # Replace with your bot token
 GOOGLE_AI_API_KEY = "AIzaSyCagXIk1RudmoinloSRyLasw21Vo2-pzhQ"
 WEB_JSON_FILE_PATH = "web.json"  # Path to web.json in your repo
 genai.configure(api_key=GOOGLE_AI_API_KEY)
