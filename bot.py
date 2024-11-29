@@ -110,7 +110,7 @@ async def handle_text(client, message):
     try:
         user_message = message.text
         # Request the AI to suggest a relevant uplifting Bible verse based on user input
-        prompt = f"Suggest an uplifting Bible verse related to this: {user_message} and explain it in cherish way."
+        prompt = f"Suggest an uplifting Bible verse in 3-4 lines related to this: {user_message} and explain it in cherish way."
         
         # Call Gemini API to generate an uplifting verse and explanation
         model = genai.GenerativeModel("gemini-1.5-flash")
