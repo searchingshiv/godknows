@@ -54,7 +54,7 @@ def get_random_verse():
 # Fetch explanation for a verse using Google AI Studio
 async def get_bible_explanation(verse):
     """Fetch an explanation for the verse using Google AI's Gemini API."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateText?key={GOOGLE_AI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta3/models/gemini-1.5:generateText?key={GOOGLE_AI_API_KEY}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "prompt": {
@@ -85,6 +85,7 @@ async def get_bible_explanation(verse):
     return (
         f"This verse describes a moment in the journey of God's people. It highlights their movement guided by divine purpose."
     )
+
 
 
 # Command: /start
