@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 API_ID = int(os.getenv("API_ID", "25833520"))  # Replace with your Telegram API ID
 API_HASH = os.getenv("API_HASH", "7d012a6cbfabc2d0436d7a09d8362af7")  # Replace with your Telegram API hash
 BOT_TOKEN = os.getenv("BOT_TOKEN", "7112230953:AAHOEjToGy4jipliOK2NBiu6ai8gNoWv5tg")  # Replace with your bot token
-GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY", "AIzaSyCagXIk1RudmoinloSRyLasw21Vo2-pzhQ")
+GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY", "")
 WEB_JSON_FILE_PATH = "web.json"  # Path to web.json in your repo
 genai.configure(api_key=GOOGLE_AI_API_KEY)
 
@@ -75,14 +75,20 @@ async def get_bible_explanation(verse):
         "This verse offers timeless wisdom, encouraging reflection on spiritual truths and their application to life."
     )
 
-# Send a reply with a picture
+# Send a reply with a picture from the environment variable
 async def reply_with_image(client, chat_id, text):
-    """Send a text reply with an accompanying image."""
-    image_path = "https://api.api-ninjas.com/v1/randomimage?category=nature"  # Replace with an actual image path
-    if os.path.exists(image_path):
-        await client.send_photo(chat_id, photo=image_path, caption=text)
+    """Send a text reply with an accompanying random image."""
+    # Fetch random image links from environment variable
+    image_links = os.getenv("RANDOM_IMAGES", "").split(",")  # Get the image links from env variable
+    if image_links:
+        image_path = random.choice(image_links)  # Pick a random image from the list
+        try:
+            await client.send_photo(chat_id, photo=image_path, caption=text)
+        except Exception as e:
+            logger.warning(f"Error sending image: {e}")
+            await client.send_message(chat_id, text)
     else:
-        logger.warning(f"Image not found: {image_path}")
+        logger.warning("No image links found in the environment variable.")
         await client.send_message(chat_id, text)
 
 # Command: /start
@@ -140,7 +146,7 @@ async def handle_text(client, message):
                 explanation = "This verse offers timeless wisdom, encouraging reflection on spiritual truths and their application to life."
             
             # Build the message with the verse and explanation
-            text = f"✨ **Uplifting Verse:**\n\n_{verse}_\n\n💬 **Explanation:**\n{explanation}"
+            text = f"✨ **Listen Dear:**\n\n{verse}\n\n😌😌"
             await reply_with_image(client, message.chat.id, text)
         else:
             await message.reply_text("Sorry, I couldn’t find a verse for you. Please try again later.")
