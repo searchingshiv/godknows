@@ -58,7 +58,7 @@ async def get_bible_explanation(verse):
     try:
         # Use the Gemini model to generate content
         model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(f"Explain this Bible verse in one or two sentences:\n\n{verse}")
+        response = model.generate_content(f"Explain this Bible verse in one or two sentences in cherish way:\n\n{verse}")
         
         explanation = response.text.strip()
         if explanation and len(explanation.split()) > 5:
@@ -106,13 +106,27 @@ async def random_verse(client, message):
 # Handle user messages
 @app.on_message(filters.text & ~filters.regex("^/"))
 async def handle_text(client, message):
-    """Handle user text messages."""
+    """Handle user text messages and suggest an uplifting verse."""
     try:
         user_message = message.text
-        response = await get_bible_explanation(user_message)
-        await message.reply_text(f"Here's an explanation:\n\n{response}")
+        # Request the AI to suggest a relevant uplifting Bible verse based on user input
+        prompt = f"Suggest an uplifting Bible verse related to this: {user_message} and explain it in cherish way."
+        
+        # Call Gemini API to generate an uplifting verse and explanation
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        
+        # Extract the verse and explanation from the AI's response
+        result = response.text.strip()
+        if result:
+            # Split the response into the verse and explanation (assuming the format is "Verse - Explanation")
+            verse, explanation = result.split(' - ', 1) if ' - ' in result else (result, "No explanation provided.")
+            # Send the uplifting verse and its explanation to the user
+            await message.reply_text(f"Here’s an uplifting verse for you:\n\n{verse}\n\nExplanation: {explanation}")
+        else:
+            await message.reply_text("Sorry, I couldn't find an uplifting verse for you. Please try again later.")
     except Exception as e:
-        logger.exception("Failed to handle text message")
+        logger.exception("Failed to handle user text message")
         await message.reply_text("Sorry, I couldn't process your message. Please try again later.")
 
 # Send a morning verse
