@@ -117,7 +117,7 @@ async def random_verse(client, message):
         await message.reply_text("Sorry, I couldn't fetch a verse right now. Please try again later.")
 
 # Handle user messages
-@app.on_message(filters.text & ~filters.command())
+@app.on_message(filters.text & ~filters.regex("^/"))
 async def handle_text(client, message):
     """Handle user text messages."""
     try:
