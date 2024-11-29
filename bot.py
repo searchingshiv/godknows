@@ -14,11 +14,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Replace these with your tokens and API keys
-API_ID = 25833520  # Replace with your Telegram API ID
-API_HASH = "7d012a6cbfabc2d0436d7a09d8362af7"  # Replace with your Telegram API hash
-BOT_TOKEN = "7112230953:AAHOEjToGy4jipliOK2NBiu6ai8gNoWv5tg"  # Replace with your bot token
-GOOGLE_AI_API_KEY = "AIzaSyCagXIk1RudmoinloSRyLasw21Vo2-pzhQ"
+# Replace these with environment variables
+API_ID = int(os.getenv("API_ID", "25833520"))  # Replace with your Telegram API ID
+API_HASH = os.getenv("API_HASH", "7d012a6cbfabc2d0436d7a09d8362af7")  # Replace with your Telegram API hash
+BOT_TOKEN = os.getenv("BOT_TOKEN", "7112230953:AAEwl9pUwc8BnC-813gHdG2zkmK6cHIZ4C8")  # Replace with your bot token
+GOOGLE_AI_API_KEY = os.getenv("GOOGLE_AI_API_KEY", "AIzaSyCagXIk1RudmoinloSRyLasw21Vo2-pzhQ")
 WEB_JSON_FILE_PATH = "web.json"  # Path to web.json in your repo
 genai.configure(api_key=GOOGLE_AI_API_KEY)
 
@@ -57,7 +57,7 @@ async def get_bible_explanation(verse):
     try:
         model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(
-            f"Explain this Bible verse in a compassionate and uplifting way:\n\n{verse}"
+            f"Explain this Bible verse in 2-3 lines and in a compassionate and uplifting way:\n\n{verse}"
         )
         explanation = response.text.strip()
         if explanation and len(explanation.split()) > 5:
@@ -117,13 +117,24 @@ async def handle_text(client, message):
     """Handle user text messages and suggest an uplifting verse."""
     try:
         user_message = message.text
-        prompt = f"Suggest an uplifting Bible verse in 3-4 lines related to this: {user_message} and explain it in cherish way."
+        prompt = f"Suggest an uplifting Bible verse in 3-4 lines related to this: {user_message} and explain it in compassionate and uplifting way."
         model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
         
         result = response.text.strip()
         if result:
-            verse, explanation = result.split(' - ', 1) if ' - ' in result else (result, "No explanation provided.")
+            # Try to split the result into verse and explanation based on the presence of ' - '
+            if ' - ' in result:
+                verse, explanation = result.split(' - ', 1)
+            else:
+                verse = result
+                explanation = "No explanation provided."
+            
+            # Check if the explanation is too short and adjust accordingly
+            if explanation == "No explanation provided." or len(explanation.split()) < 3:
+                explanation = "This verse offers timeless wisdom, encouraging reflection on spiritual truths and their application to life."
+            
+            # Build the message with the verse and explanation
             text = f"✨ **Uplifting Verse:**\n\n_{verse}_\n\n💬 **Explanation:**\n{explanation}"
             await reply_with_image(client, message.chat.id, text)
         else:
@@ -155,7 +166,8 @@ async def help_command(client, message):
         "Send any text to get an uplifting verse and explanation!"
     )
 
-# Start the bot
+# Ensure the bot listens on the correct port for Render deployment
 if __name__ == "__main__":
+    port = int(os.getenv("PORT", 5000))  # Default to 5000 if no port is set
     scheduler.start()
-    app.run()
+    app.run(port=port)
