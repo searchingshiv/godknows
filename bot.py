@@ -168,7 +168,7 @@ async def handle_text(client, message):
             await message.reply_text("Sorry, I couldn’t find a verse for you. Please try again later.")
     except Exception as e:
         logger.exception("Failed to handle user text message")
-        await message.reply_text("Sorry, I couldn’t process your message. Please try again later.")
+        
 
 # Send a morning verse
 async def send_morning_verse(chat_id):
