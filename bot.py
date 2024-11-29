@@ -9,6 +9,11 @@ import google.generativeai as genai
 from flask import Flask
 from threading import Thread
 
+from pyrogram import utils
+
+
+
+
 # Configure logging
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -32,6 +37,17 @@ scheduler = AsyncIOScheduler()
 
 # Initialize Flask app for deployment
 flask_app = Flask(__name__)
+
+def get_peer_type_new(peer_id: int) -> str:
+    peer_id_str = str(peer_id)
+    if not peer_id_str.startswith("-"):
+        return "user"
+    elif peer_id_str.startswith("-100"):
+        return "channel"
+    else:
+        return "chat"
+
+utils.get_peer_type = get_peer_type_new
 
 # Helper function to load Bible data
 def load_bible_data():
