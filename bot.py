@@ -7,6 +7,7 @@ import datetime
 from pyrogram import Client, filters
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+import google.generativeai as genai
 
 # Configure logging
 logging.basicConfig(
@@ -21,7 +22,7 @@ API_HASH = "7d012a6cbfabc2d0436d7a09d8362af7"  # Replace with your Telegram API 
 BOT_TOKEN = "7112230953:AAFCXqfbPPKDjyhqMR2kB79-va6r41hL5k4"  # Replace with your bot token
 GOOGLE_AI_API_KEY = "AIzaSyCagXIk1RudmoinloSRyLasw21Vo2-pzhQ"
 WEB_JSON_FILE_PATH = "web.json"  # Path to web.json in your repo
-
+genai.configure(api_key=GOOGLE_AI_API_KEY)
 # Initialize the Pyrogram client
 app = Client("bible_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
@@ -54,39 +55,22 @@ def get_random_verse():
 # Fetch explanation for a verse using Google AI Studio
 async def get_bible_explanation(verse):
     """Fetch an explanation for the verse using Google AI's Gemini API."""
-    url = f"https://generativelanguage.googleapis.com/v1beta3/models/gemini-1.5:generateText?key={GOOGLE_AI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
-    payload = {
-        "prompt": {
-            "text": f"Explain this Bible verse in one or two sentences:\n\n{verse}",
-        },
-        "temperature": 0.7,
-        "maxOutputTokens": 50,
-    }
+    try:
+        # Use the Gemini model to generate content
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(f"Explain this Bible verse in one or two sentences:\n\n{verse}")
+        
+        explanation = response.text.strip()
+        if explanation and len(explanation.split()) > 5:
+            return explanation
+        logger.warning("Incomplete or invalid explanation received.")
+    except Exception as e:
+        logger.exception(f"Error fetching explanation: {e}")
 
-    for attempt in range(3):  # Retry logic
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(url, headers=headers, json=payload) as response:
-                    data = await response.json()
-                    if response.status == 200:
-                        logger.info(f"API Response: {data}")
-                        explanation = data.get("text", "").strip()
-
-                        if explanation and len(explanation.split()) > 5:
-                            return explanation
-                        logger.warning("Incomplete or invalid explanation received.")
-                    else:
-                        logger.error(f"API Error {response.status}: {data}")
-        except Exception as e:
-            logger.exception(f"Attempt {attempt + 1}: Error fetching explanation: {e}")
-
-    # Fallback explanation
+    # Fallback explanation if the API fails
     return (
-        f"This verse describes a moment in the journey of God's people. It highlights their movement guided by divine purpose."
+        "This verse offers timeless wisdom, encouraging reflection on spiritual truths and their application to life."
     )
-
-
 
 # Command: /start
 @app.on_message(filters.command("start"))
