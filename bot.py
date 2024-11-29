@@ -55,9 +55,7 @@ def get_random_verse():
 async def get_bible_explanation(verse):
     """Fetch an explanation for the verse using Google AI's Gemini API."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateText?key={GOOGLE_AI_API_KEY}"
-    headers = {
-        "Content-Type": "application/json",
-    }
+    headers = {"Content-Type": "application/json"}
     payload = {
         "prompt": {
             "text": f"Explain this Bible verse in one or two sentences:\n\n{verse}",
@@ -70,20 +68,24 @@ async def get_bible_explanation(verse):
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=payload) as response:
+                    data = await response.json()
                     if response.status == 200:
-                        data = await response.json()
+                        logger.info(f"API Response: {data}")
                         explanation = data.get("text", "").strip()
 
                         if explanation and len(explanation.split()) > 5:
                             return explanation
                         logger.warning("Incomplete or invalid explanation received.")
+                    else:
+                        logger.error(f"API Error {response.status}: {data}")
         except Exception as e:
-            logger.warning(f"Attempt {attempt + 1}: Error fetching explanation: {e}")
+            logger.exception(f"Attempt {attempt + 1}: Error fetching explanation: {e}")
 
     # Fallback explanation
     return (
-        "This verse offers timeless wisdom, encouraging reflection on spiritual truths and their application to life."
+        f"This verse describes a moment in the journey of God's people. It highlights their movement guided by divine purpose."
     )
+
 
 # Command: /start
 @app.on_message(filters.command("start"))
