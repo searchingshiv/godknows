@@ -4,3 +4,4 @@ apscheduler==3.10.1
 aiohttp==3.8.5
 google-generativeai
 flask
+pytz
