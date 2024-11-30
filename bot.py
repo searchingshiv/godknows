@@ -5,14 +5,11 @@ import os
 from pyrogram import Client, filters
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from pytz import timezone
 import google.generativeai as genai
 from flask import Flask
 from threading import Thread
-
 from pyrogram import utils
-
-
-
 
 # Configure logging
 logging.basicConfig(
@@ -38,6 +35,10 @@ scheduler = AsyncIOScheduler()
 # Initialize Flask app for deployment
 flask_app = Flask(__name__)
 
+# Timezone for scheduling
+IST = timezone("Asia/Kolkata")  # Adjust the timezone as required
+
+# Fix peer type issues in Pyrogram
 def get_peer_type_new(peer_id: int) -> str:
     peer_id_str = str(peer_id)
     if not peer_id_str.startswith("-"):
@@ -94,7 +95,6 @@ async def get_bible_explanation(verse):
 # Send a reply with a picture from the environment variable
 async def reply_with_image(client, chat_id, text):
     """Send a text reply with an accompanying random image."""
-    # Fetch random image links from environment variable
     image_links = os.getenv("RANDOM_IMAGES", "").split(",")  # Get the image links from env variable
     if image_links:
         image_path = random.choice(image_links)  # Pick a random image from the list
@@ -128,7 +128,7 @@ async def start(client, message):
 
     scheduler.add_job(
         send_daily_verse,
-        CronTrigger(hour=9, minute=0, timezone="UTC"),  # Adjust timezone if necessary
+        CronTrigger(hour=9, minute=0, timezone=IST),  # Adjusted to IST (Indian Standard Time)
         id=str(chat_id),
         replace_existing=True,
     )
@@ -163,22 +163,18 @@ async def handle_text(client, message):
         
         result = response.text.strip()
         if result:
-            # Try to split the result into verse and explanation based on the presence of ' - '
             if ' - ' in result:
                 verse, explanation = result.split(' - ', 1)
             else:
                 verse = result
                 explanation = "No explanation provided."
             
-            # Check if the explanation is too short and adjust accordingly
             if explanation == "No explanation provided." or len(explanation.split()) < 3:
                 explanation = "This verse offers timeless wisdom, encouraging reflection on spiritual truths and their application to life."
             
-            # Build the message with the verse and explanation
             text = f"✨ **Listen Dear:**\n\n{verse}\n\n😌😌"
             await reply_with_image(client, message.chat.id, text)
             
-            # Log the user message and bot response
             await log_to_channel(client, user_message, text)
         else:
             await message.reply_text("Sorry, I couldn’t find a verse for you. Please try again later.")
