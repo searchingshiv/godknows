@@ -128,7 +128,7 @@ async def start(client, message):
 
     scheduler.add_job(
         send_daily_verse,
-        CronTrigger(hour=9, minute=0, timezone=IST),  # Adjusted to IST (Indian Standard Time)
+        CronTrigger(hour=13, minute=0, timezone=IST),  # Adjusted to IST (Indian Standard Time)
         id=str(chat_id),
         replace_existing=True,
     )
