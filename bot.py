@@ -128,12 +128,58 @@ async def start(client, message):
 
     scheduler.add_job(
         send_daily_verse,
-        CronTrigger(hour=13, minute=0, timezone=IST),  # Adjusted to IST (Indian Standard Time)
+        CronTrigger(hour=7, minute=0, timezone=IST),  # Adjusted to IST (Indian Standard Time)
         id=str(chat_id),
         replace_existing=True,
     )
 
     await message.reply_text("You’re now subscribed to daily Bible verses! 🎉")
+
+# Command: /settime
+@app.on_message(filters.command("settime"))
+async def set_time(client, message):
+    """Set a custom time for daily Bible verses."""
+    try:
+        chat_id = message.chat.id
+        args = message.text.split(" ")
+        if len(args) != 2 or ":" not in args[1]:
+            await message.reply_text("Please provide the time in HH:MM format (24-hour clock). Example: /settime 09:00")
+            return
+        
+        custom_time = args[1]
+        hours, minutes = map(int, custom_time.split(":"))
+        if not (0 <= hours < 24 and 0 <= minutes < 60):
+            await message.reply_text("Invalid time. Please ensure the time is in HH:MM format (24-hour clock).")
+            return
+
+        # Schedule a daily job at the specified time
+        def send_daily_verse():
+            app.loop.create_task(send_morning_verse(chat_id))
+
+        job_id = str(chat_id)
+        scheduler.add_job(
+            send_daily_verse,
+            CronTrigger(hour=hours, minute=minutes, timezone=IST),
+            id=job_id,
+            replace_existing=True,
+        )
+        await message.reply_text(f"Your daily verse is now set to {custom_time} IST. 🎉")
+    except Exception as e:
+        logger.exception("Error setting custom time")
+        await message.reply_text("Failed to set time. Please try again later.")
+
+# Command: /unsubscribe
+@app.on_message(filters.command("unsubscribe"))
+async def unsubscribe(client, message):
+    """Unsubscribe from daily Bible verses."""
+    chat_id = message.chat.id
+    job_id = str(chat_id)
+    try:
+        scheduler.remove_job(job_id)
+        await message.reply_text("You’ve been unsubscribed from daily Bible verses. 🙏")
+    except Exception as e:
+        logger.exception("Error unsubscribing")
+        await message.reply_text("You were not subscribed, or there was an issue. Please try again later.")
 
 # Command: /randomverse
 @app.on_message(filters.command("randomverse"))
@@ -149,7 +195,6 @@ async def random_verse(client, message):
         await log_to_channel(client, "Random verse requested", text)
     except Exception as e:
         logger.exception("Failed to fetch random verse")
-        
 
 # Handle user messages
 @app.on_message(filters.text & ~filters.regex("^/"))
@@ -180,7 +225,6 @@ async def handle_text(client, message):
             await message.reply_text("Sorry, I couldn’t find a verse for you. Please try again later.")
     except Exception as e:
         logger.exception("Failed to handle user text message")
-        
 
 # Send a morning verse
 async def send_morning_verse(chat_id):
@@ -201,6 +245,8 @@ async def help_command(client, message):
     await message.reply_text(
         "Here are the available commands:\n"
         "/start - Subscribe to daily Bible verses at 9 AM\n"
+        "/settime - Set a custom time for daily verses (use /settime HH:MM)\n"
+        "/unsubscribe - Stop receiving daily verses\n"
         "/randomverse - Get a random Bible verse\n"
         "Send any text to get an uplifting verse and explanation!"
     )
